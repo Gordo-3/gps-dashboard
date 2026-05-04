@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>GPS Performance Dashboard</title>
+
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    body {
+      font-family: 'Bebas Neue', sans-serif;
+      background: #000;
+      color: #fff;
+      margin: 20px;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 10px;
+    }
+
+    img { height: 70px; }
+
+    h1 {
+      color: #FFE500;
+      font-size: 44px;
+      margin: 0;
+    }
+
+    /* TABS */
+    .tabs {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin: 20px 0;
+    }
+
+    .tab {
+      padding: 8px 15px;
+      border: 1px solid #FFE500;
+      cursor: pointer;
+      color: #fff;
+      background: #111;
+    }
+
+    .tab.active {
+      background: #FFE500;
+      color: #000;
+    }
+
+    /* CONTROLS */
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      justify-content: center;
+      margin-bottom: 15px;
+    }
+
+    label { color: #FFE500; }
+
+    select, input {
+      background: #111;
+      color: #fff;
+      border: 1px solid #FFE500;
+      padding: 6px;
+      border-radius: 6px;
+      font-family: inherit;
+    }
+
+    canvas {
+      background: #111;
+      border: 1px solid #FFE500;
+      border-radius: 12px;
+      padding: 10px;
+      margin-top: 10px;
+    }
+
+    #top5, #comparison, #summary {
+      margin-top: 15px;
+      padding: 15px;
+      background: #111;
+      border: 1px solid #FFE500;
+      border-radius: 12px;
+    }
+
+    .compare-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 3px 0;
+    }
+
+    .win { color: #FFE500; }
+  </style>
+</head>
+
+<body>
+
+<div class="header">
+  <img src="logo.png">
+  <h1>GPS PERFORMANCE DASHBOARD</h1>
+</div>
+
+<!-- TABS -->
+<div class="tabs">
+  <div class="tab active" onclick="setView('game')">Game</div>
+  <div class="tab" onclick="setView('training')">Training</div>
+  <div class="tab" onclick="setView('compare')">Compare</div>
+  <div class="tab" onclick="setView('overview')">Overview</div>
+</div>
+
+<!-- CONTROLS -->
+<div class="controls">
+
+  <div>
+    <label>Metric</label><br>
+    <select id="metricSelect"></select>
+  </div>
+
+  <div>
+    <label>Players</label><br>
+    <select id="playerFilter" multiple></select>
+  </div>
+
+  <div>
+    <label>Player A</label><br>
+    <select id="playerA"></select>
+  </div>
+
+  <div>
+    <label>Player B</label><br>
+    <select id="playerB"></select>
+  </div>
+
+  <div>
+    <label>Position</label><br>
+    <select id="positionFilter" multiple></select>
+  </div>
+
+  <div>
+    <label>Mins</label><br>
+    <input type="range" id="minsSlider" min="0" max="120" value="0">
+  </div>
+
+</div>
+
+<canvas id="chart"></canvas>
+
+<div id="summary"></div>
+<div id="top5"></div>
+<div id="comparison"></div>
+<canvas id="radar"></canvas>
+
+<script>
+
+const SHEET_ID = "1NjflNGpLnBaQfV0NXtILRT7X7Uz7ILMEPrJu5U4R2qc";
+const url = `https://opensheet.elk.sh/${SHEET_ID}/GPS`;
+
+let allData = [];
+let view = "game";
+let currentMetric = "Distance (km)";
+let minMins = 0;
+let chart, radar;
+
+/* METRICS */
+const METRICS = [
+  "Distance (km)",
+  "HSR (m)",
+  "Player Load",
+  "Top Speed (km/h)",
+  "Hard Accelerations (#)",
+  "Hard Decelerations (#)"
+];
+
+const COMPARE = METRICS;
+
+/* SESSION TYPE */
+function getType(split){
+  if(!split) return "DRILL";
+  if(split.includes("Full Game")) return "GAME";
+  if(split.includes("Full Session")) return "TRAINING";
+  return "DRILL";
+}
+
+/* VIEW SWITCH */
+function setView(v){
+  view = v;
+  document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
+  event.target.classList.add("active");
+  updateAll();
+}
+
+/* INIT */
+fetch(url)
+.then(r=>r.json())
+.then(d=>{
+  allData = d;
+  setup();
+  updateAll();
+});
+
+/* SETUP */
+function setup(){
+  setupMetrics();
+  setupFilters();
+  setupSlider();
+}
+
+/* METRICS */
+function setupMetrics(){
+  const sel = document.getElementById("metricSelect");
+  METRICS.forEach(m=>{
+    let o = document.createElement("option");
+    o.value = m;
+    o.text = m;
+    sel.appendChild(o);
+  });
+
+  sel.onchange = e=>{
+    currentMetric = e.target.value;
+    updateAll();
+  };
+}
+
+/* FILTERS */
+function setupFilters(){
+  fill("playerFilter","Player Name");
+  fill("playerA","Player Name");
+  fill("playerB","Player Name");
+  fill("positionFilter","Position");
+
+  document.querySelectorAll("select").forEach(s=>{
+    s.onchange = updateAll;
+  });
+}
+
+/* SLIDER */
+function setupSlider(){
+  document.getElementById("minsSlider").oninput = e=>{
+    minMins = +e.target.value;
+    updateAll();
+  };
+}
+
+/* FILL */
+function fill(id, field){
+  const el = document.getElementById(id);
+  [...new Set(allData.map(d=>d[field]))].forEach(v=>{
+    let o=document.createElement("option");
+    o.value=o.text=v;
+    el.appendChild(o);
+  });
+}
+
+/* FILTER */
+function filtered(){
+  const pos = [...document.getElementById("positionFilter").selectedOptions].map(o=>o.value);
+
+  return allData.filter(d=>{
+    const t = getType(d["Split Name"]);
+
+    const typeOK =
+      view==="game" ? t==="GAME" :
+      view==="training" ? t==="TRAINING" :
+      true;
+
+    return typeOK &&
+      (!pos.length || pos.includes(d["Position"])) &&
+      Number(d["Mins Played"])>=minMins;
+  });
+}
+
+/* MAIN */
+function updateAll(){
+  const data = filtered();
+  drawChart(data);
+  summary(data);
+  top5(data);
+  compare(data);
+}
+
+/* CHART */
+function drawChart(data){
+  const days=[...new Set(data.map(d=>d.Date))];
+
+  const players=[...new Set(data.map(d=>d["Player Name"]))];
+
+  const sets = players.map(p=>({
+    label:p,
+    data:days.map(d=>{
+      let r=data.find(x=>x.Date===d && x["Player Name"]===p);
+      return r?+r[currentMetric]:null;
+    }),
+    borderColor:"#FFE500"
+  }));
+
+  const avg = days.map(d=>{
+    let day=data.filter(x=>x.Date===d);
+    return day.length?day.reduce((s,x)=>s+ +x[currentMetric],0)/day.length:null;
+  });
+
+  sets.push({
+    label:"TEAM AVG",
+    data:avg,
+    borderColor:"#fff",
+    borderDash:[5,5]
+  });
+
+  if(chart) chart.destroy();
+
+  chart=new Chart(document.getElementById("chart"),{
+    type:"line",
+    data:{labels:days,datasets:sets}
+  });
+}
+
+/* SUMMARY */
+function summary(data){
+  let total=data.reduce((s,d)=>s+ +d[currentMetric],0);
+  document.getElementById("summary").innerHTML=`
+    <h3>TEAM SUMMARY</h3>
+    Avg: ${(total/data.length||0).toFixed(2)}
+  `;
+}
+
+/* TOP 5 */
+function top5(data){
+  let map={};
+  data.forEach(d=>{
+    map[d["Player Name"]]=(map[d["Player Name"]]||0)+ +d[currentMetric];
+  });
+
+  let sorted=Object.entries(map).sort((a,b)=>b[1]-a[1]).slice(0,5);
+
+  document.getElementById("top5").innerHTML=
+  "<h3>TOP 5</h3>"+
+  sorted.map((x,i)=>`${i+1}. ${x[0]} - ${x[1].toFixed(2)}`).join("<br>");
+}
+
+/* COMPARE */
+function compare(data){
+  const a=document.getElementById("playerA").value;
+  const b=document.getElementById("playerB").value;
+
+  if(!a||!b)return;
+
+  let rows=COMPARE.map(m=>{
+    let A=data.filter(d=>d["Player Name"]===a).reduce((s,d)=>s+ +d[m],0);
+    let B=data.filter(d=>d["Player Name"]===b).reduce((s,d)=>s+ +d[m],0);
+    return {m,A,B};
+  });
+
+  document.getElementById("comparison").innerHTML=
+    "<h3>COMPARE</h3>"+
+    rows.map(r=>`${r.m}: ${a} ${r.A.toFixed(1)} | ${b} ${r.B.toFixed(1)}`).join("<br>");
+}
+
+</script>
+
+</body>
+</html>
