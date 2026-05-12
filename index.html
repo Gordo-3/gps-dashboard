@@ -2112,29 +2112,33 @@ function rptMatchPlayerChart(doc,gameId,squadName,dateRange,crestB64,crestW,cres
 
 // ── TABLE HELPER ─────────────────────────────────────────────────
 function rptTable(doc,headers,rows2,sx,sy,tableW,rh){
+  // Auto-centre vertically if sy not specified sensibly
+  const totalH=(rows2.length+1)*rh;
+  const centredSy=sy||(RPT_H-totalH)/2;
   const colW=tableW/headers.length;
   // Header
-  doc.setFillColor(RPT_BK);doc.rect(sx,sy,tableW,rh,'F');
-  doc.setFont('helvetica','bold');doc.setFontSize(7);doc.setTextColor(RPT_Y);
+  doc.setFillColor(RPT_BK);doc.rect(sx,centredSy,tableW,rh,'F');
+  doc.setFont('helvetica','bold');doc.setFontSize(7.5);doc.setTextColor(RPT_Y);
   headers.forEach((h,i)=>{
     const lines=doc.splitTextToSize(h,colW-3);
-    lines.forEach((l,li)=>doc.text(l,sx+i*colW+colW/2,sy+5+li*4,{align:'center'}));
+    const textH=lines.length*4;
+    lines.forEach((l,li)=>doc.text(l,sx+i*colW+colW/2,centredSy+rh/2-textH/2+4+li*4,{align:'center'}));
   });
   // Data rows
   rows2.forEach((row,ri)=>{
-    const ry=sy+(ri+1)*rh;
+    const ry=centredSy+(ri+1)*rh;
     doc.setFillColor(ri%2===0?RPT_Y:'#fff09a');doc.rect(sx,ry,tableW,rh,'F');
-    doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(RPT_BK);
-    row.forEach((cell,ci)=>{
-      doc.text(String(cell===null||cell===undefined?'—':cell),sx+ci*colW+colW/2,ry+rh/2+2,{align:'center'});
-    });
     // Column dividers
     doc.setDrawColor('#ccc');doc.setLineWidth(0.2);
     headers.forEach((_,i)=>{if(i>0)doc.line(sx+i*colW,ry,sx+i*colW,ry+rh);});
+    doc.setFont('helvetica','bold');doc.setFontSize(8.5);doc.setTextColor(RPT_BK);
+    row.forEach((cell,ci)=>{
+      doc.text(String(cell===null||cell===undefined?'—':cell),sx+ci*colW+colW/2,ry+rh/2+3,{align:'center'});
+    });
   });
   // Outer border
-  doc.setDrawColor(RPT_BK);doc.setLineWidth(0.4);
-  doc.rect(sx,sy,tableW,(rows2.length+1)*rh);
+  doc.setDrawColor(RPT_BK);doc.setLineWidth(0.5);
+  doc.rect(sx,centredSy,tableW,(rows2.length+1)*rh);
 }
 
 // ── PAGE 6: GK Match Day Stats ───────────────────────────────────
@@ -2150,8 +2154,8 @@ function rptGKMatch(doc,gameId,squadName,dateRange,crestB64,crestW,crestH){
     const d=gkRows.filter(r=>r[RPT_COLS.player]===gk);
     return[gk,rptFmt(rptAvg(d,RPT_COLS.mins),0),rptFmt(rptAvg(d,RPT_COLS.spd)),rptFmt(rptSum(d,RPT_COLS.hacc),0),rptFmt(rptSum(d,RPT_COLS.hdec),0),rptFmt((rptSum(d,RPT_COLS.gkdive1)||0)+(rptSum(d,RPT_COLS.gkdive2)||0),0)];
   });
-  const tableW=RPT_W-20;const sx=10;const sy=30;const rh=16;
-  rptTable(doc,headers,tableRows,sx,sy,tableW,rh);
+  const tableW=RPT_W-20;const sx=10;const rh=18;
+  rptTable(doc,headers,tableRows,sx,null,tableW,rh);
   return true;
 }
 
@@ -2167,8 +2171,7 @@ function rptMatchTeamAvg(doc,gameId,squadName,dateRange,crestB64,crestW,crestH){
     const rows=allData.filter(d=>d[RPT_COLS.evid]===gameId&&d[RPT_COLS.split]===sp&&d[RPT_COLS.pos]!=='GK');
     return[sp,...metCols.map(col=>rptFmt(rptAvg(rows,col)))];
   });
-  const tableW=RPT_W-10;const sx=5;const sy=28;const rh=18;
-  rptTable(doc,headers,tableRows,sx,sy,tableW,rh);
+  rptTable(doc,headers,tableRows,5,null,RPT_W-10,20);
 }
 
 // ── PAGES 8-9: Season Trend ──────────────────────────────────────
@@ -2178,78 +2181,70 @@ function rptSeasonTrend(doc,gameId,squad,squadName,dateRange,crestB64,crestW,cre
     allData.filter(d=>{
       const id=d[RPT_COLS.evid]||'';
       const tag=(d[RPT_COLS.tags]||'').toLowerCase().trim();
-      const sq=d[RPT_COLS.squad]||'';
-      return tag==='game'&&/^R\d+/i.test(id)&&sq===squad&&(d._date||0)<=gameDate;
+      const ts=d['Team Session']||'';
+      return tag==='game'&&/^R\d+/i.test(id)&&ts===squad&&(d._date||0)<=gameDate;
     }).map(d=>d[RPT_COLS.evid])
   )]);
-
+  const LOGO_SIZE=9;
   const drawTrend=(title,metricPairs)=>{
     rptYellowSlide(doc);
     rptSlideHeader(doc,title,squadName+' · In-Season Rounds Only',crestB64,crestW,crestH);
     rptSlideFooter(doc,'SPIRIT FC GPS REPORT',dateRange);
-    if(!roundEvs.length)return;
-
+    if(!roundEvs.length){doc.setFont('helvetica','normal');doc.setFontSize(10);doc.setTextColor(RPT_BK);doc.text('No round data found for '+squadName,RPT_W/2,RPT_H/2,{align:'center'});return;}
     const n=metricPairs.length;
-    const chartH=(RPT_H-22)/n;
-    const cx=20,cw=RPT_W-30;
-
+    const leftMargin=30,bottomMargin=20;
+    const chartH=(RPT_H-22-bottomMargin)/n;
+    const cx=leftMargin,cw=RPT_W-leftMargin-8;
     metricPairs.forEach((m,mi)=>{
-      const sy=20+mi*chartH;const ch=chartH-8;
+      const sy=20+mi*chartH;const ch=chartH-4;
       const vals=roundEvs.map(id=>{
         const rows=allData.filter(d=>d[RPT_COLS.evid]===id&&d[RPT_COLS.split]==='Full Game'&&d[RPT_COLS.pos]!=='GK'&&+d[RPT_COLS.mins]>=58);
         return rptAvg(rows,m.col);
       });
       const validVals=vals.filter(v=>v!==null);
       if(!validVals.length)return;
-      const mx=Math.max(...validVals)*1.1;
-      const mn=Math.min(...validVals)*0.9;
-      const range=mx-mn||1;
-
-      // Chart bg
+      const mx=Math.max(...validVals)*1.12,mn=Math.min(...validVals)*0.88,range=mx-mn||1;
       doc.setFillColor('#fffde6');doc.rect(cx,sy,cw,ch,'F');
-      // Y label
-      doc.setFont('helvetica','bold');doc.setFontSize(6);doc.setTextColor(RPT_BK);
-      doc.text(m.label,cx-2,sy+ch/2,{align:'right',angle:0});
-
-      // Grid lines
-      doc.setDrawColor('#ddd');doc.setLineWidth(0.2);
-      [0.25,0.5,0.75].forEach(t=>{const gy=sy+ch-(t*ch*0.85);doc.line(cx,gy,cx+cw,gy);});
-
+      // Y label rotated
+      doc.setFont('helvetica','bold');doc.setFontSize(7);doc.setTextColor(RPT_BK);
+      doc.text(m.label,cx-4,sy+ch/2,{align:'center',angle:90});
+      // Grid + Y values
+      doc.setDrawColor('#ccc');doc.setLineWidth(0.2);
+      [0,0.25,0.5,0.75,1].forEach(t=>{
+        const gy=sy+ch-(t*(ch*0.85));
+        doc.line(cx,gy,cx+cw,gy);
+        doc.setFont('helvetica','normal');doc.setFontSize(5);doc.setTextColor('#666');
+        doc.text((mn+t*range).toFixed(1),cx-1,gy+1.5,{align:'right'});
+      });
       // Axes
-      doc.setDrawColor(RPT_BK);doc.setLineWidth(0.5);
+      doc.setDrawColor(RPT_BK);doc.setLineWidth(0.6);
       doc.line(cx,sy,cx,sy+ch);doc.line(cx,sy+ch,cx+cw,sy+ch);
-
       const n2=roundEvs.length;
-      const pts=roundEvs.map((id,i)=>{
-        const v=vals[i];if(v===null)return null;
-        return{x:cx+i*(cw/(n2-1||1)),y:sy+ch-(v-mn)/range*ch*0.85,v,id};
+      const step=n2>1?cw/(n2-1):0;
+      const pts=roundEvs.map((id,i)=>({x:cx+i*step,y:vals[i]!==null?sy+ch-(vals[i]-mn)/range*(ch*0.85):null,v:vals[i],id}));
+      // Draw line first
+      doc.setDrawColor(RPT_BK);doc.setLineWidth(1.5);
+      let last=null;
+      pts.forEach(pt=>{if(pt.y===null){last=null;return;}if(last!==null)doc.line(last.x,last.y,pt.x,pt.y);last=pt;});
+      // Draw logos/dots on top
+      pts.forEach(pt=>{
+        if(pt.y===null)return;
+        const logo=oppLogos[pt.id];
+        if(logo){doc.addImage(logo,'PNG',pt.x-LOGO_SIZE/2,pt.y-LOGO_SIZE/2,LOGO_SIZE,LOGO_SIZE);}
+        else{doc.setFillColor(RPT_WH);doc.circle(pt.x,pt.y,2.5,'F');doc.setDrawColor(RPT_BK);doc.setLineWidth(0.6);doc.circle(pt.x,pt.y,2.5,'D');}
+        doc.setFont('helvetica','bold');doc.setFontSize(6);doc.setTextColor(RPT_BK);
+        doc.text(pt.v.toFixed(1),pt.x,pt.y-LOGO_SIZE/2-2,{align:'center'});
       });
-
-      // Line
-      doc.setDrawColor(RPT_BK);doc.setLineWidth(1.2);
-      pts.forEach((pt,i)=>{if(!pt||!pts[i-1])return;doc.line(pts[i-1].x,pts[i-1].y,pt.x,pt.y);});
-
-      // Points with logos
-      pts.forEach((pt,i)=>{
-        if(!pt)return;
-        const logo=oppLogos[pt.id];const sz=oppLogoSizes[pt.id];
-        if(logo&&sz){
-          const lh=8,lw=sz.w&&sz.h?8*(sz.w/sz.h):8;
-          doc.addImage(logo,'PNG',pt.x-lw/2,pt.y-lh/2,lw,lh);
-        } else {
-          doc.setFillColor(RPT_BK);doc.circle(pt.x,pt.y,1.5,'F');
-        }
-        // Value label above
-        doc.setFont('helvetica','bold');doc.setFontSize(5.5);doc.setTextColor(RPT_BK);
-        doc.text(pt.v.toFixed(1),pt.x,pt.y-5,{align:'center'});
-        // X label (short round ID)
-        const shortId=pt.id.replace(/\s+vs\s+.*/i,'').trim();
-        doc.setFont('helvetica','normal');doc.setFontSize(4.5);doc.setTextColor('#666');
-        doc.text(shortId,pt.x,sy+ch+4,{align:'center'});
-      });
+      // X labels only on bottom chart, rotated 45deg
+      if(mi===n-1){
+        pts.forEach(pt=>{
+          const shortId=pt.id.replace(/\s+vs\s+.*/i,'').trim();
+          doc.setFont('helvetica','bold');doc.setFontSize(5.5);doc.setTextColor('#333');
+          doc.text(shortId,pt.x+1,sy+ch+4,{angle:45,align:'left'});
+        });
+      }
     });
   };
-
   drawTrend('Season Trend — Distance & Work Rate',[
     {col:RPT_COLS.dist,label:'Avg Distance (km)'},
     {col:RPT_COLS.wr,label:'Avg Work Rate (m/min)'}
@@ -2257,7 +2252,7 @@ function rptSeasonTrend(doc,gameId,squad,squadName,dateRange,crestB64,crestW,cre
   rptPage(doc);
   drawTrend('Season Trend — HSR & Sprint Distance',[
     {col:RPT_COLS.hsr,label:'Avg HSR (m)'},
-    {col:RPT_COLS.sprint,label:'Avg Sprint (m)'}
+    {col:RPT_COLS.sprint,label:'Avg Sprint Distance (m)'}
   ]);
 }
 
@@ -2363,7 +2358,7 @@ function rptGKTrain(doc,trainIds,squadName,dateRange,crestB64,crestW,crestH){
     const d=rows.filter(r=>r[RPT_COLS.player]===gk);
     return[gk,rptFmt(rptAvg(d,RPT_COLS.mins),0),rptFmt(rptAvg(d,RPT_COLS.spd)),rptFmt(rptSum(d,RPT_COLS.hacc),0),rptFmt(rptSum(d,RPT_COLS.hdec),0),rptFmt((rptSum(d,RPT_COLS.gkdive1)||0)+(rptSum(d,RPT_COLS.gkdive2)||0),0)];
   });
-  rptTable(doc,headers,tableRows,5,30,RPT_W-10,16);
+  rptTable(doc,headers,tableRows,5,null,RPT_W-10,18);
   return true;
 }
 
@@ -2381,7 +2376,7 @@ function rptSessionAvg(doc,trainId,squadName,dateRange,crestB64,crestW,crestH){
     const rows=allData.filter(d=>d[RPT_COLS.evid]===trainId&&d[RPT_COLS.split]===sp&&d[RPT_COLS.pos]!=='GK');
     return[sp,...metCols.map(col=>rptFmt(rptAvg(rows,col)))];
   });
-  rptTable(doc,headers,tableRows,5,28,RPT_W-10,16);
+  rptTable(doc,headers,tableRows,5,null,RPT_W-10,18);
 }
 
 // ── MAIN: Generate Report ─────────────────────────────────────────
