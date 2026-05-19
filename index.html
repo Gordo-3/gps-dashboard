@@ -2593,10 +2593,15 @@ function rptTop5(doc,gameId,squadName,dateRange,crestB64,crestW,crestH,headshots
       doc.setTextColor(i<3?RPT_BK:RPT_WH);
       doc.text(MEDAL_LABELS[i],x+14,ry+entryH/2+2,{align:'center'});
       // Headshot or initials
-      const hs=headshots[p.name];
+      const hsData=headshots[p.name];
       const hsSize=entryH-4;const hsX=x+24;const hsY=ry+2;
-      if(hs){
-        doc.addImage(hs,'PNG',hsX,hsY,hsSize,hsSize);
+      if(hsData){
+        // Fit image into square preserving aspect ratio (letterbox)
+        const ar=hsData.w&&hsData.h?hsData.w/hsData.h:1;
+        let dw,dh,dx,dy;
+        if(ar>1){dw=hsSize;dh=hsSize/ar;dx=hsX;dy=hsY+(hsSize-dh)/2;}
+        else{dh=hsSize;dw=hsSize*ar;dx=hsX+(hsSize-dw)/2;dy=hsY;}
+        doc.addImage(hsData.b64,'PNG',dx,dy,dw,dh);
       } else {
         // Styled initials badge — dark bg with medal colour ring and bold initials
         doc.setFillColor('#1a1a1a');doc.circle(hsX+hsSize/2,hsY+hsSize/2,hsSize/2,'F');
@@ -2847,7 +2852,13 @@ function rptSeasonTrend(doc,gameId,squad,squadName,dateRange,crestB64,crestW,cre
       pts.forEach(pt=>{
         if(pt.y===null)return;
         const logo=oppLogos[pt.id];
-        if(logo){doc.addImage(logo,'PNG',pt.x-LOGO_SIZE/2,pt.y-LOGO_SIZE/2,LOGO_SIZE,LOGO_SIZE);}
+        if(logo){
+          const ls=oppLogoSizes[pt.id]||{w:1,h:1};
+          const ar=ls.w/ls.h;
+          let lw,lh;
+          if(ar>1){lw=LOGO_SIZE;lh=LOGO_SIZE/ar;}else{lh=LOGO_SIZE;lw=LOGO_SIZE*ar;}
+          doc.addImage(logo,'PNG',pt.x-lw/2,pt.y-lh/2,lw,lh);
+        }
         else{doc.setFillColor(RPT_WH);doc.circle(pt.x,pt.y,2.5,'F');doc.setDrawColor(RPT_BK);doc.setLineWidth(0.6);doc.circle(pt.x,pt.y,2.5,'D');}
         // Value label above logo
         doc.setFont('helvetica','bold');doc.setFontSize(7);doc.setTextColor(RPT_BK);
@@ -3073,7 +3084,7 @@ async function generateReport(){
   const topRows=allData.filter(d=>d[RPT_COLS.evid]===gameId&&d[RPT_COLS.split]==='Full Game'&&d[RPT_COLS.pos]!=='GK'&&+d[RPT_COLS.mins]>=58);
   const topPlayers=[...new Set(topRows.map(d=>d[RPT_COLS.player]).filter(Boolean))];
   const headshots={};
-  await Promise.all(topPlayers.map(name=>new Promise(r=>{rptGetHeadshot(name,(b)=>{if(b)headshots[name]=b;r();});})));
+  await Promise.all(topPlayers.map(name=>new Promise(r=>{rptGetHeadshot(name,(b,w,h)=>{if(b)headshots[name]={b64:b,w,h};r();});})));
 
   // RPE/Wellness sessions
   const allSessionIds=[...trainIds,gameId];
