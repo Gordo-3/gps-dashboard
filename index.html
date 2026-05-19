@@ -4139,7 +4139,8 @@ function acwrTogglePlayer(name,btn){
 /* ===================== END ACWR TAB ===================== */
 
 /* ===================== TEAM v TEAM TAB ===================== */
-const TVT_METRICS=["Distance (km)","Work Rate (m/min)","HSR (m)","Sprint Distance (m)","Top Speed (km/h)","Hard Accelerations (#)","Hard Decelerations (#)","Mins Played"];
+const TVT_METRICS=["Distance (km)","Work Rate (m/min)","HSR (m)","HSR (m/min)","Sprint Distance (m)","Sprint (m/min)","Top Speed (km/h)","Hard Accelerations (#)","Accelerations/min","Hard Decelerations (#)","Decelerations/min","Mins Played"];
+const TVT_PER_MIN_MAP={"HSR (m/min)":"HSR (m)","Sprint (m/min)":"Sprint Distance (m)","Accelerations/min":"Hard Accelerations (#)","Decelerations/min":"Hard Decelerations (#)"};
 // Session type logic:
 // game   = Tags==="game", Split Name="Full Game"
 // training = Tags==="training", title NOT regen/conditioning/tactical, Split="Full Session"
@@ -4231,6 +4232,8 @@ function tvtUpdateMinsFill(){}
 function drawTvT(){
   const metSel=document.getElementById("tvtMetSel");if(!metSel)return;
   const metric=metSel.value||"Distance (km)";
+  const isPerMin=!!TVT_PER_MIN_MAP[metric];
+  const rawMetric=isPerMin?TVT_PER_MIN_MAP[metric]:metric;
   const fromDate=document.getElementById("tvtFrom")?.value?new Date(document.getElementById("tvtFrom").value):null;
   const toDate=document.getElementById("tvtTo")?.value?new Date(document.getElementById("tvtTo").value):null;
   const ckPos=gck("tvtPosCb");
@@ -4250,9 +4253,16 @@ function drawTvT(){
       return true;
     });
     if(!rows.length){squadVals[sq]=null;return;}
-    const vals=rows.map(d=>+d[metric]).filter(v=>!isNaN(v)&&isFinite(v));
-    if(!vals.length){squadVals[sq]=null;return;}
-    squadVals[sq]=tvtState.mode==="sum"?+(vals.reduce((a,b)=>a+b,0)).toFixed(2):+(vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(2);
+    if(isPerMin){
+      // Per-minute: sum raw metric / sum mins for each row, then average across rows
+      const perMinVals=rows.map(d=>{const v=+d[rawMetric];const m=+d["Mins Played"];return(!isNaN(v)&&!isNaN(m)&&m>0)?v/m:null;}).filter(v=>v!==null);
+      if(!perMinVals.length){squadVals[sq]=null;return;}
+      squadVals[sq]=tvtState.mode==="sum"?+(perMinVals.reduce((a,b)=>a+b,0)).toFixed(3):+(perMinVals.reduce((a,b)=>a+b,0)/perMinVals.length).toFixed(3);
+    } else {
+      const vals=rows.map(d=>+d[rawMetric]).filter(v=>!isNaN(v)&&isFinite(v));
+      if(!vals.length){squadVals[sq]=null;return;}
+      squadVals[sq]=tvtState.mode==="sum"?+(vals.reduce((a,b)=>a+b,0)).toFixed(2):+(vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(2);
+    }
   });
 
   const data=squads.map(sq=>squadVals[sq]);
