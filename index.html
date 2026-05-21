@@ -44,14 +44,14 @@
     .fs-hd{display:flex;align-items:center;justify-content:space-between;padding:.7rem 1rem;cursor:pointer;user-select:none;transition:background .12s;}
     .fs-hd:hover{background:#1c1c1c;}
     .fs-hd-left{display:flex;align-items:center;gap:8px;}
-    .fs-hd-title{font-family:var(--font-d);font-size:11px;letter-spacing:.15em;color:var(--y);text-transform:uppercase;font-weight:700;}
+    .fs-hd-title{font-family:var(--font-d);font-size:13px;letter-spacing:.15em;color:var(--y);text-transform:uppercase;font-weight:700;}
     .fs-badge{background:var(--y);color:var(--blk);border-radius:10px;padding:1px 6px;font-family:var(--font-m);font-size:9px;font-weight:800;display:none;}
     .fs-badge.show{display:inline-block;}
     .fs-arrow{font-size:9px;color:#666;transition:transform .2s;}
     .fs-arrow.open{transform:rotate(180deg);}
     .fs-body{padding:0 1rem .9rem;display:none;}
     .fs-body.open{display:block;}
-    .sb-lbl{font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--fdl);margin-bottom:4px;margin-top:.6rem;display:block;}
+    .sb-lbl{font-size:12px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--fdl);margin-bottom:4px;margin-top:.6rem;display:block;}
     .sb-lbl:first-child{margin-top:0;}
     .sb-sel{width:100%;background:var(--fdi);border:1px solid var(--fdborder);border-radius:var(--r);color:var(--fdt);font-family:var(--font-b);font-size:13px;padding:7px 9px;cursor:pointer;appearance:none;}
     .sb-sel:focus{outline:none;border-color:var(--y);}
@@ -1449,7 +1449,7 @@ function toggleCtrl(key){ctrls[key]=!ctrls[key];const el=document.getElementById
 
 /* HELPERS */
 function gck(cls){return new Set([...document.querySelectorAll("."+cls+":checked")].map(c=>c.value));}
-function ckAll(cls,v){document.querySelectorAll("."+cls).forEach(c=>{c.checked=v;});go();}
+function ckAll(cls,v){document.querySelectorAll("."+cls).forEach(c=>{c.checked=v;});if(cls==="evcb")onEvChange();else go();}
 function onMet(){curMet=document.getElementById("metSel").value;go();}
 function onDr(){let a=+document.getElementById("drMin").value,b=+document.getElementById("drMax").value;if(a>b){const t=a;a=b;b=t;}mMin=a;mMax=b;document.getElementById("drLbl").textContent=a+" – "+b+" min";const p1=(a/120)*100,p2=(b/120)*100;document.getElementById("drFill").style.cssText="left:"+p1+"%;width:"+(p2-p1)+"%";updateBadge("mins",a>0||b<120);if(curTab==="h2h"){["A","B"].forEach(s=>renderH2HEvents(s,""));}go();}
 function onTrLine(){let a=+document.getElementById("trLineMin").value,b=+document.getElementById("trLineMax").value;if(a>b){const t=a;a=b;b=t;}trLineMin=a;trLineMax=b;document.getElementById("trLineLbl").textContent=a+" – "+b+" min";document.getElementById("trLineFill").style.cssText="left:"+((a/120)*100)+"%;width:"+((b-a)/120*100)+"%";go();}
@@ -1776,7 +1776,7 @@ function go(){
 
 /* PLAYER STATS */
 function playerStats(data,met){met=met||curMet;const pm={},mm={};data.forEach(d=>{const n=d["Player Full Name"];if(!n)return;const v=+d[met],m=+d["Mins Played"];if(!isNaN(v))pm[n]=(pm[n]||[]).concat(v);if(!isNaN(m))mm[n]=(mm[n]||[]).concat(m);});return Object.keys(pm).map(n=>{const vals=pm[n].filter(v=>!isNaN(v));const mins=mm[n]||[];const value=rkMode==="sum"?vals.reduce((a,b)=>a+b,0):vals.reduce((a,b)=>a+b,0)/vals.length;const minsVal=rkMode==="sum"?mins.reduce((a,b)=>a+b,0):mins.length?mins.reduce((a,b)=>a+b,0)/mins.length:0;const personalAvg=vals.reduce((a,b)=>a+b,0)/vals.length;return{n,value,mins:minsVal,personalAvg};}).sort((a,b)=>b.value-a.value);}
-function personalAvgAllTime(playerName,met){met=met||curMet;const vals=allData.filter(d=>d["Player Full Name"]===playerName).map(d=>+d[met]).filter(v=>!isNaN(v));return vals.length?vals.reduce((a,b)=>a+b,0)/vals.length:0;}
+function personalAvgAllTime(playerName,met,splitName){met=met||curMet;const vals=allData.filter(d=>d["Player Full Name"]===playerName&&(!splitName||d["Split Name"]===splitName)).map(d=>+d[met]).filter(v=>!isNaN(v));return vals.length?vals.reduce((a,b)=>a+b,0)/vals.length:0;}
 function rollingAvg(evIds,valMap,dateMap,days=30){return evIds.map((id,i)=>{const ref=dateMap[id];if(!ref)return null;const cut=new Date(ref);cut.setDate(cut.getDate()-days);const wv=evIds.slice(0,i+1).filter(eid=>dateMap[eid]&&dateMap[eid]>=cut&&dateMap[eid]<=ref).map(eid=>valMap[eid]).filter(v=>v!=null);return wv.length?+(wv.reduce((a,b)=>a+b,0)/wv.length).toFixed(2):null;});}
 function linReg(vals){const n=vals.length;if(n<2)return null;let sx=0,sy=0,sxy=0,sx2=0;vals.forEach((y,x)=>{if(y===null)return;sx+=x;sy+=y;sxy+=x*y;sx2+=x*x;});const m=(n*sxy-sx*sy)/(n*sx2-sx*sx),b=(sy-m*sx)/n;return vals.map((_,x)=>+(m*x+b).toFixed(2));}
 function sortByDate(evIds){return evIds.sort((a,b)=>{const da=allData.find(x=>x["Event ID"]===a)?._date||0,db=allData.find(x=>x["Event ID"]===b)?._date||0;return da-db;});}
@@ -1857,7 +1857,9 @@ function drawPlayer(data){
   if(plci)plci.destroy();
   plci=new Chart(document.getElementById("plChart"),{type:"bar",data:{labels:ps.map(p=>p.n),datasets},options:{indexAxis:"y",responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:tt()},scales:{x:{ticks:{font:{size:11},color:"#777"},grid:{color:"rgba(0,0,0,0.04)"},border:{display:false}},y:{ticks:{font:{size:12},color:"#444"},grid:{display:false},border:{display:false}}}}});
   const mx=Math.max(...ps.map(p=>p.value),1);
-  document.getElementById("plRankRows").innerHTML=ps.map((p,i)=>{const pA=personalAvgAllTime(p.n);const devPct=pA>0?((p.personalAvg-pA)/pA*100):0;const arrow=devPct>2?"↑":devPct<-2?"↓":"→";const ac=devPct>2?"#22c55e":devPct<-2?"#e63946":"#aaa";return'<div class="rr"><span class="rn">'+(i+1)+'</span><span class="rtrend" style="color:'+ac+'">'+arrow+'</span>'+imgEl(p.n,"rava",28)+'<span class="rnm pp-trigger" data-player="'+p.n.replace(/"/g,'&quot;')+'" title="'+p.n+'">'+p.n+'</span><div class="rbw"><div class="rb" style="width:'+(p.value/mx*100).toFixed(1)+'%;background:'+PAL[i%PAL.length]+'"></div></div><span class="rv">'+p.value.toFixed(1)+'</span>'+(ctrls.deviation?'<span class="rdev '+(devPct>=0?"pos":"neg")+'">'+(devPct>=0?"+":"")+devPct.toFixed(1)+'%</span>':'')+'<span class="rmins">'+Math.round(p.mins)+' min</span></div>';}).join("");
+  const _tags=new Set(data.map(d=>(d["Tags"]||"").toLowerCase().trim()).filter(Boolean));
+  const _baselineSplit=_tags.size===1?(_tags.has("game")?"Full Game":_tags.has("training")?"Full Session":null):null;
+  document.getElementById("plRankRows").innerHTML=ps.map((p,i)=>{const pA=personalAvgAllTime(p.n,undefined,_baselineSplit);const devPct=pA>0?((p.personalAvg-pA)/pA*100):0;const arrow=devPct>2?"↑":devPct<-2?"↓":"→";const ac=devPct>2?"#22c55e":devPct<-2?"#e63946":"#aaa";return'<div class="rr"><span class="rn">'+(i+1)+'</span><span class="rtrend" style="color:'+ac+'">'+arrow+'</span>'+imgEl(p.n,"rava",28)+'<span class="rnm pp-trigger" data-player="'+p.n.replace(/"/g,'&quot;')+'" title="'+p.n+'">'+p.n+'</span><div class="rbw"><div class="rb" style="width:'+(p.value/mx*100).toFixed(1)+'%;background:'+PAL[i%PAL.length]+'"></div></div><span class="rv">'+p.value.toFixed(1)+'</span>'+(ctrls.deviation?'<span class="rdev '+(devPct>=0?"pos":"neg")+'">'+(devPct>=0?"+":"")+devPct.toFixed(1)+'%</span>':'')+'<span class="rmins">'+Math.round(p.mins)+' min</span></div>';}).join("");
 }
 
 /* TRACKING */
