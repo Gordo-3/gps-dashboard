@@ -407,6 +407,8 @@
     .lo-msg{font-size:13px;color:#888;letter-spacing:.04em;}
     .lo-spinner{width:32px;height:32px;border:3px solid #333;border-top-color:var(--y);border-radius:50%;animation:spin .8s linear infinite;}
     @keyframes spin{to{transform:rotate(360deg);}}
+    .lo-bar-wrap{width:240px;height:4px;background:#2a2a2a;border-radius:2px;overflow:hidden;}
+    .lo-bar{height:100%;width:0%;background:var(--y);border-radius:2px;transition:width .6s cubic-bezier(.25,.8,.25,1);}
     #pwOverlay{position:fixed;inset:0;background:#111;z-index:10000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.2rem;}
     #pwOverlay.hidden{display:none;}
     .pw-logo{height:100px;width:auto;margin-bottom:.5rem;}
@@ -493,7 +495,8 @@
   <img class="lo-logo" src="Logo.png" alt="Spirit FC" onerror="this.style.display='none'">
   <div class="lo-title">GPS PERFORMANCE</div>
   <div class="lo-spinner"></div>
-  <div class="lo-msg">Gathering team data…</div>
+  <div class="lo-bar-wrap"><div class="lo-bar" id="loBar"></div></div>
+  <div class="lo-msg" id="loMsg">Gathering team data…</div>
 </div>
 <header class="hdr">
   <img class="hdr-logo" src="Logo.png" alt="Club" onerror="this.style.display='none'">
@@ -1147,14 +1150,33 @@ function setH2HAvatar(side,player){
   img.className="h2h-big-ava";img.onerror=function(){hsErr(this);};img.src=base+".png";oldEl.replaceWith(img);
 }
 
+/* LOAD BAR */
+function startLoBar(){
+  const b=document.getElementById('loBar');
+  if(!b)return;
+  b.style.transition='none';b.style.width='0%';
+  clearTimeout(window._lt1);clearTimeout(window._lt2);clearTimeout(window._lt3);clearTimeout(window._lt4);
+  window._lt1=setTimeout(()=>{if(b){b.style.transition='width .6s cubic-bezier(.25,.8,.25,1)';b.style.width='28%';}},80);
+  window._lt2=setTimeout(()=>{if(b)b.style.width='52%';},900);
+  window._lt3=setTimeout(()=>{if(b)b.style.width='72%';},2000);
+  window._lt4=setTimeout(()=>{if(b)b.style.width='87%';},3500);
+}
+function endLoBar(){
+  const b=document.getElementById('loBar');
+  if(!b)return;
+  clearTimeout(window._lt1);clearTimeout(window._lt2);clearTimeout(window._lt3);clearTimeout(window._lt4);
+  b.style.transition='width .2s ease';b.style.width='100%';
+}
+
 /* LOAD */
 function loadData(){
   ss("loading","Refreshing…");
+  startLoBar();
 
   function fetchWithTimeout(url,ms=4000){return new Promise((res,rej)=>{const t=setTimeout(()=>rej(new Error('timeout')),ms);fetch(url+"&t="+Date.now()).then(r=>r.text()).then(t2=>{clearTimeout(t);res(t2);}).catch(e=>{clearTimeout(t);rej(e);});});}
 function fetchWithRetry(url,retries=3){return fetchWithTimeout(url).then(t=>{if(!t.includes('setResponse')){if(retries>0)return new Promise(res=>setTimeout(()=>res(fetchWithRetry(url,retries-1)),2000));throw new Error('bad response');}return t;}).catch(e=>{if(retries>0){console.log('Retrying:',url.substring(0,60));return new Promise(res=>setTimeout(()=>res(fetchWithRetry(url,retries-1)),2000));}throw e;});}
 Promise.all(APIS.map((url,i)=>fetchWithRetry(url).then(t=>{const js=t.replace(/^\/\*[\s\S]*?\*\/\s*/,"").replace(/^google\.visualization\.Query\.setResponse\(/,"").replace(/\);\s*$/,"");return pgviz(JSON.parse(js)).map(r=>({...r,_date:parseDate(r["Date"]),_source:SHEETS[i].label}));}))).then(results=>{allData=results.flat();
-  const ov=document.getElementById('loadingOverlay');if(ov){ov.classList.add('hidden');setTimeout(()=>ov.remove(),500);}const dates=allData.map(r=>r._date).filter(Boolean);if(dates.length){minDate=new Date(Math.min(...dates));maxDate=new Date(Math.max(...dates));document.getElementById("dateFrom").value=dateToInput(minDate);document.getElementById("dateTo").value=dateToInput(maxDate);}ss("live",allData.length+" records · "+new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}));buildSB();buildTrEvGrid();buildTrMetSels();buildH2HCards();buildGameFilters();initScatter();go();}).catch(e=>{console.error(e);ss("err","Failed to load — retrying...");setTimeout(loadData,3000);});
+  endLoBar();const ov=document.getElementById('loadingOverlay');if(ov){setTimeout(()=>{ov.classList.add('hidden');setTimeout(()=>ov.remove(),500);},220);}const dates=allData.map(r=>r._date).filter(Boolean);if(dates.length){minDate=new Date(Math.min(...dates));maxDate=new Date(Math.max(...dates));document.getElementById("dateFrom").value=dateToInput(minDate);document.getElementById("dateTo").value=dateToInput(maxDate);}ss("live",allData.length+" records · "+new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}));buildSB();buildTrEvGrid();buildTrMetSels();buildH2HCards();buildGameFilters();initScatter();go();}).catch(e=>{console.error(e);ss("err","Failed to load — retrying...");setTimeout(loadData,3000);});
 }
 function pgviz(j){const cols=j.table.cols.map(c=>(c.label||c.id).trim());return j.table.rows.map(row=>{const o={};cols.forEach((c,i)=>{const cell=row.c?row.c[i]:null;o[c]=(cell&&cell.v!=null)?String(cell.v):"";});return o;}).filter(r=>Object.values(r).some(v=>v!==""));}
 function ss(st,txt){document.getElementById("sTxt").textContent=txt;document.getElementById("sDot").className="dot"+(st==="live"?" live":st==="loading"?" loading":"");}
