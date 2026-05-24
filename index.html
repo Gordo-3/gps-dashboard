@@ -2579,7 +2579,7 @@ function rptTop5(doc,gameId,squadName,dateRange,crestB64,crestW,crestH,headshots
   rptSlideHeader(doc,'Match Day — Top 5',gameId.replace(/:.*$/,'').trim(),crestB64,crestW,crestH);
   rptSlideFooter(doc,'SPIRIT FC GPS REPORT',dateRange);
 
-  const rows=allData.filter(d=>d[RPT_COLS.evid]===gameId&&d[RPT_COLS.split]==='Full Game'&&d[RPT_COLS.pos]!=='GK'&&+d[RPT_COLS.mins]>=58);
+  const rows=allData.filter(d=>d[RPT_COLS.evid]===gameId&&d[RPT_COLS.split]==='Full Game'&&d[RPT_COLS.pos]!=='GK');
   const pm=new Map();
   rows.forEach(d=>{
     const p=d[RPT_COLS.player];if(!p)return;
