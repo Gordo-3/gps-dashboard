@@ -2418,7 +2418,7 @@ function rptFitFont(doc,texts,maxW,maxSize=9,minSize=3.5){
 let rptPageNum=1;
 function rptPage(doc){doc.addPage([RPT_W,RPT_H],'landscape');rptPageNum++;}
 function rptAddPageNum(doc){
-  doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor('#888');
+  doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor('#888');
   doc.text(String(rptPageNum),RPT_W/2,RPT_H-2,{align:'center'});
 }
 
@@ -2455,13 +2455,13 @@ function rptSlideHeader(doc,title,subtitle,crestB64,crestW,crestH){
   // Title
   doc.setFont('helvetica','bold');doc.setFontSize(13);doc.setTextColor(RPT_Y);
   doc.text(title,RPT_W/2,10,{align:'center'});
-  if(subtitle){doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor('#aaaaaa');doc.text(subtitle,RPT_W/2,15,{align:'center'});}
+  if(subtitle){doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor('#aaaaaa');doc.text(subtitle,RPT_W/2,15,{align:'center'});}
 }
 function rptSlideFooter(doc,left,right){
   doc.setFillColor(RPT_BK);doc.rect(0,RPT_H-8,RPT_W,8,'F');
-  doc.setFont('helvetica','normal');doc.setFontSize(6);doc.setTextColor(RPT_Y);
+  doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(RPT_Y);
   doc.text(left,4,RPT_H-3);doc.text(right,RPT_W-4,RPT_H-3,{align:'right'});
-  doc.setFont('helvetica','normal');doc.setFontSize(6);doc.setTextColor('#888');
+  doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor('#888');
   doc.text(String(rptPageNum),RPT_W/2,RPT_H-3,{align:'center'});
 }
 
@@ -2605,7 +2605,7 @@ function rptTop5(doc,gameId,squadName,dateRange,crestB64,crestW,crestH,headshots
     doc.setFillColor(RPT_Y);doc.rect(x,27,cardW,7,'F');
     doc.setFont('helvetica','bold');doc.setFontSize(10);doc.setTextColor(RPT_BK);
     doc.text('TOP 5 — '+metric,x+cardW/2,29,{align:'center'});
-    doc.setFont('helvetica','bold');doc.setFontSize(7);doc.setTextColor('#333');
+    doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor('#333');
     doc.text('('+unit+')',x+cardW/2,35,{align:'center'});
 
     const entryH=(RPT_H-30-16)/5;
@@ -2629,6 +2629,7 @@ function rptTop5(doc,gameId,squadName,dateRange,crestB64,crestW,crestH,headshots
         if(ar>1){dw=hsSize;dh=hsSize/ar;dx=hsX;dy=hsY+(hsSize-dh)/2;}
         else{dh=hsSize;dw=hsSize*ar;dx=hsX+(hsSize-dw)/2;dy=hsY;}
         doc.addImage(hsData.b64,'PNG',dx,dy,dw,dh);
+        doc.setDrawColor('#FFE500');doc.setLineWidth(1);doc.rect(hsX,hsY,hsSize,hsSize);
       } else {
         // Styled initials badge — dark bg with medal colour ring and bold initials
         doc.setFillColor('#1a1a1a');doc.circle(hsX+hsSize/2,hsY+hsSize/2,hsSize/2,'F');
@@ -2701,17 +2702,17 @@ function rptMatchPlayerChart(doc,gameId,squadName,dateRange,crestB64,crestW,cres
   const rowH=availH/players.length;
 
   // Fit-to-size for names and values — matching training week
-  const nameFontSizeG=rptFitFont(doc,players.map(p=>p.name),nameW-3,9,4);
+  const nameFontSizeG=rptFitFont(doc,players.map(p=>p.name),nameW-3,11,5);
   const allValsG=[];players.forEach(p=>metrics.forEach(m=>{if(p[m.col])allValsG.push(p[m.col].toFixed(1));}));
-  const valFontSizeG=rptFitFont(doc,allValsG,metW-14,8,4);
+  const valFontSizeG=rptFitFont(doc,allValsG,metW-14,10,5);
 
   // Metric headers — bigger bold matching training week
   doc.setFillColor(RPT_BK);doc.rect(nameW,startY,RPT_W-nameW-4,headerH,'F');
   metrics.forEach((m,mi)=>{
     const bx=nameW+mi*metW;
-    doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(RPT_Y);
+    doc.setFont('helvetica','bold');doc.setFontSize(10);doc.setTextColor(RPT_Y);
     doc.text(m.label,bx+metW/2,startY+6,{align:'center'});
-    doc.setFont('helvetica','bold');doc.setFontSize(6);doc.setTextColor('#aaa');
+    doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor('#aaa');
     doc.text(m.unit,bx+metW/2,startY+10.5,{align:'center'});
   });
 
@@ -2722,21 +2723,32 @@ function rptMatchPlayerChart(doc,gameId,squadName,dateRange,crestB64,crestW,cres
     doc.setFillColor(pi%2===0?'#fffde6':'#fff9b0');doc.rect(0,y,RPT_W,rowH,'F');
     doc.setFont('helvetica','bold');doc.setFontSize(nameFontSizeG);doc.setTextColor(RPT_BK);
     doc.text(p.name,nameW-1,y+rowH/2+nameFontSizeG*0.2,{align:'right'});
+    // Pass 1: bars
     metrics.forEach((m,mi)=>{
-      const val=p[m.col]||0;const mx=maxes[m.col];const avg=teamAvgs[m.col];
-      const bx=nameW+mi*metW+1;
-      const availBarW=metW-14;
+      const val=p[m.col]||0;const mx=maxes[m.col];
+      const bx=nameW+mi*metW+1;const availBarW=metW-14;
       const bw=Math.max((val/mx)*availBarW,0.5);
       const barH=rowH*0.52;const barY=y+(rowH-barH)/2;
       doc.setFillColor(col);doc.roundedRect(bx,barY,bw,barH,0.5,0.5,'F');
-      doc.setFont('helvetica','bold');doc.setFontSize(valFontSizeG);doc.setTextColor(RPT_BK);
-      doc.text(val.toFixed(1),bx+bw+1,y+rowH/2+valFontSizeG*0.2);
+    });
+    // Pass 2: avg lines
+    metrics.forEach((m,mi)=>{
+      const avg=teamAvgs[m.col];const mx=maxes[m.col];
+      const bx=nameW+mi*metW+1;const availBarW=metW-14;
       const avgX=bx+(avg/mx)*availBarW;
       doc.setDrawColor('#e63946');doc.setLineWidth(0.5);doc.line(avgX,y+1,avgX,y+rowH-1);
     });
+    // Pass 3: value labels (on top of everything)
+    metrics.forEach((m,mi)=>{
+      const val=p[m.col]||0;const mx=maxes[m.col];
+      const bx=nameW+mi*metW+1;const availBarW=metW-14;
+      const bw=Math.max((val/mx)*availBarW,0.5);
+      doc.setFont('helvetica','bold');doc.setFontSize(valFontSizeG);doc.setTextColor(RPT_BK);
+      doc.text(val.toFixed(1),bx+bw+1,y+rowH/2+valFontSizeG*0.2);
+    });
   });
   // Avg labels
-  doc.setFont('helvetica','italic');doc.setFontSize(5);doc.setTextColor('#e63946');
+  doc.setFont('helvetica','italic');doc.setFontSize(7);doc.setTextColor('#e63946');
   metrics.forEach((m,mi)=>{
     const bx=nameW+mi*metW+1;const avg=teamAvgs[m.col];const mx=maxes[m.col];
     const avgX=bx+(avg/mx)*(metW-14);
@@ -2752,7 +2764,7 @@ function rptTable(doc,headers,rows2,sx,sy,tableW,rh){
   const colW=tableW/headers.length;
   // Header
   doc.setFillColor(RPT_BK);doc.rect(sx,centredSy,tableW,rh,'F');
-  doc.setFont('helvetica','bold');doc.setFontSize(7.5);doc.setTextColor(RPT_Y);
+  doc.setFont('helvetica','bold');doc.setFontSize(9.5);doc.setTextColor(RPT_Y);
   headers.forEach((h,i)=>{
     const lines=doc.splitTextToSize(h,colW-3);
     const textH=lines.length*4;
@@ -2763,9 +2775,9 @@ function rptTable(doc,headers,rows2,sx,sy,tableW,rh){
     const ry=centredSy+(ri+1)*rh;
     doc.setFillColor(ri%2===0?RPT_Y:'#fff09a');doc.rect(sx,ry,tableW,rh,'F');
     // Column dividers
-    doc.setDrawColor('#ccc');doc.setLineWidth(0.2);
+    doc.setDrawColor('#999');doc.setLineWidth(0.5);
     headers.forEach((_,i)=>{if(i>0)doc.line(sx+i*colW,ry,sx+i*colW,ry+rh);});
-    doc.setFont('helvetica','bold');doc.setFontSize(8.5);doc.setTextColor(RPT_BK);
+    doc.setFont('helvetica','bold');doc.setFontSize(10.5);doc.setTextColor(RPT_BK);
     row.forEach((cell,ci)=>{
       doc.text(String(cell===null||cell===undefined?'—':cell),sx+ci*colW+colW/2,ry+rh/2+3,{align:'center'});
     });
@@ -2859,7 +2871,7 @@ function rptSeasonTrend(doc,gameId,squad,squadName,dateRange,crestB64,crestW,cre
       doc.setLineDashPattern([3,2],0);
       doc.line(cx,avgY,cx+cw,avgY);
       doc.setLineDashPattern([],0);
-      doc.setFont('helvetica','bold');doc.setFontSize(5.5);doc.setTextColor('#e63946');
+      doc.setFont('helvetica','bold');doc.setFontSize(7.5);doc.setTextColor('#e63946');
       doc.text('Season avg: '+seasonAvg.toFixed(1),cx+cw-2,avgY-2,{align:'right'});
       // Axes
       doc.setDrawColor(RPT_BK);doc.setLineWidth(0.6);
@@ -2875,7 +2887,7 @@ function rptSeasonTrend(doc,gameId,squad,squadName,dateRange,crestB64,crestW,cre
         if(last!==null)doc.line(last.x,last.y,pt.x,pt.y);
         last=pt;
       });
-      // Draw logos/dots on top
+      // Draw logos/dots (pass 1)
       pts.forEach(pt=>{
         if(pt.y===null)return;
         const logo=oppLogos[pt.id];
@@ -2887,8 +2899,12 @@ function rptSeasonTrend(doc,gameId,squad,squadName,dateRange,crestB64,crestW,cre
           doc.addImage(logo,'PNG',pt.x-lw/2,pt.y-lh/2,lw,lh);
         }
         else{doc.setFillColor(RPT_WH);doc.circle(pt.x,pt.y,2.5,'F');doc.setDrawColor(RPT_BK);doc.setLineWidth(0.6);doc.circle(pt.x,pt.y,2.5,'D');}
+      });
+      // Value labels + result labels on top of everything (pass 2)
+      pts.forEach(pt=>{
+        if(pt.y===null||pt.v===null)return;
         // Value label above logo
-        doc.setFont('helvetica','bold');doc.setFontSize(7);doc.setTextColor(RPT_BK);
+        doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(RPT_BK);
         doc.text(pt.v.toFixed(1),pt.x,pt.y-LOGO_SIZE/2-2,{align:'center'});
         // Result label above value
         const resultRow=allData.find(d=>d[RPT_COLS.evid]===pt.id&&d[RPT_COLS.result]);
@@ -2897,7 +2913,7 @@ function rptSeasonTrend(doc,gameId,squad,squadName,dateRange,crestB64,crestW,cre
           const isW=result.toUpperCase().endsWith('W');
           const isL=result.toUpperCase().endsWith('L');
           const col=isW?'#22c55e':isL?'#e63946':'#111111';
-          doc.setFont('helvetica','bold');doc.setFontSize(6);doc.setTextColor(col);
+          doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(col);
           doc.text(result,pt.x,pt.y-LOGO_SIZE/2-8,{align:'center'});
         }
       });
@@ -2992,18 +3008,18 @@ function rptTrainPlayerChart(doc,trainIds,squadName,dateRange,crestB64,crestW,cr
   const rowH=availH/players.length;
 
   // Fit-to-size for player names
-  const nameFontSize=rptFitFont(doc,players.map(p=>p.name),nameW-3,9,4);
+  const nameFontSize=rptFitFont(doc,players.map(p=>p.name),nameW-3,11,5);
   // Fit-to-size for data values
   const allVals=[];players.forEach(p=>metrics.forEach(m=>{if(p[m.col])allVals.push(p[m.col].toFixed(1));}));
-  const valFontSize=rptFitFont(doc,allVals,metW-14,8,4);
+  const valFontSize=rptFitFont(doc,allVals,metW-14,10,5);
 
   // Headers — bigger and bold matching game day
   doc.setFillColor(RPT_BK);doc.rect(nameW,startY,RPT_W-nameW-4,headerH,'F');
   metrics.forEach((m,mi)=>{
     const bx=nameW+mi*metW;
-    doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(RPT_Y);
+    doc.setFont('helvetica','bold');doc.setFontSize(10);doc.setTextColor(RPT_Y);
     doc.text(m.label+(m.useSum?' (total)':' (avg)'),bx+metW/2,startY+6,{align:'center'});
-    doc.setFont('helvetica','bold');doc.setFontSize(6);doc.setTextColor('#aaa');
+    doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor('#aaa');
     doc.text(m.unit,bx+metW/2,startY+10.5,{align:'center'});
   });
 
@@ -3014,19 +3030,31 @@ function rptTrainPlayerChart(doc,trainIds,squadName,dateRange,crestB64,crestW,cr
     doc.setFillColor(pi%2===0?'#fffde6':'#fff9b0');doc.rect(0,y,RPT_W,rowH,'F');
     doc.setFont('helvetica','bold');doc.setFontSize(nameFontSize);doc.setTextColor(RPT_BK);
     doc.text(p.name,nameW-1,y+rowH/2+nameFontSize*0.2,{align:'right'});
+    // Pass 1: bars
     metrics.forEach((m,mi)=>{
-      const val=p[m.col]||0;const mx=maxes[m.col];const ref=teamRef[m.col];
+      const val=p[m.col]||0;const mx=maxes[m.col];
       const bx=nameW+mi*metW+1;const availBarW=metW-14;
       const bw=Math.max((val/mx)*availBarW,0.5);
       const barH=rowH*0.52;const barY=y+(rowH-barH)/2;
       doc.setFillColor(col);doc.roundedRect(bx,barY,bw,barH,0.5,0.5,'F');
-      doc.setFont('helvetica','bold');doc.setFontSize(valFontSize);doc.setTextColor(RPT_BK);
-      doc.text(val.toFixed(1),bx+bw+1,y+rowH/2+valFontSize*0.2);
+    });
+    // Pass 2: avg lines
+    metrics.forEach((m,mi)=>{
+      const ref=teamRef[m.col];const mx=maxes[m.col];
+      const bx=nameW+mi*metW+1;const availBarW=metW-14;
       const refX=bx+(ref/mx)*availBarW;
       doc.setDrawColor('#e63946');doc.setLineWidth(0.5);doc.line(refX,y+1,refX,y+rowH-1);
     });
+    // Pass 3: value labels (on top of everything)
+    metrics.forEach((m,mi)=>{
+      const val=p[m.col]||0;const mx=maxes[m.col];
+      const bx=nameW+mi*metW+1;const availBarW=metW-14;
+      const bw=Math.max((val/mx)*availBarW,0.5);
+      doc.setFont('helvetica','bold');doc.setFontSize(valFontSize);doc.setTextColor(RPT_BK);
+      doc.text(val.toFixed(1),bx+bw+1,y+rowH/2+valFontSize*0.2);
+    });
   });
-  doc.setFont('helvetica','bold');doc.setFontSize(5);doc.setTextColor('#e63946');
+  doc.setFont('helvetica','bold');doc.setFontSize(7);doc.setTextColor('#e63946');
   metrics.forEach((m,mi)=>{
     const bx=nameW+mi*metW+1;const ref=teamRef[m.col];const mx=maxes[m.col];
     const refX=bx+(ref/mx)*(metW-14);
