@@ -4418,7 +4418,7 @@ function getJerseyNumber(playerName) {
 
 /* ===================== PLAYER REPORT MODAL ===================== */
 const SQUAD_ORDER_PR = ['MYL 13','MYL 14','MYL 15','MYL 16','MYL 18','MSnr 20','MSnr 1st'];
-let prState = { squad: '', player: '', allPlayers: [] };
+let prState = { squad: '', player: '', allPlayers: [], compareTo: '' };
 
 function openPlayerReportModal() {
   const squads = [...new Set(allData.map(d => d['Squad']).filter(Boolean))]
@@ -4433,12 +4433,18 @@ function openPlayerReportModal() {
     ].join('');
   prState.player = '';
   prState.squad = '';
+  prState.compareTo = '';
   prBuildPlayerList();
   document.getElementById('prSearch').value = '';
   document.getElementById('prSelectedLabel').textContent = 'No player selected';
   document.getElementById('prSingleBtn').disabled = true;
   document.getElementById('prSingleBtn').style.opacity = '.4';
   document.getElementById('prProgress').style.display = 'none';
+  document.getElementById('prCompareRow').style.display = 'none';
+  document.getElementById('prCompareSearch').value = '';
+  document.getElementById('prCompareDropdown').style.display = 'none';
+  document.getElementById('prCompareDropdown').innerHTML = '';
+  prRenderCompareSelected();
   document.getElementById('prModal').style.display = 'flex';
 }
 
@@ -4484,6 +4490,7 @@ function prRenderPlayerList(players) {
 
 function prSelectPlayer(name) {
   prState.player = name;
+  prState.compareTo = '';
   document.getElementById('prSelectedLabel').textContent = name;
   document.getElementById('prSingleBtn').disabled = false;
   document.getElementById('prSingleBtn').style.opacity = '1';
@@ -4491,6 +4498,45 @@ function prSelectPlayer(name) {
     !document.getElementById('prSearch').value ||
     p.toLowerCase().includes(document.getElementById('prSearch').value.toLowerCase())
   ));
+  document.getElementById('prCompareRow').style.display = 'block';
+  document.getElementById('prCompareSearch').value = '';
+  document.getElementById('prCompareDropdown').style.display = 'none';
+  document.getElementById('prCompareDropdown').innerHTML = '';
+  prRenderCompareSelected();
+}
+
+/* ---- comparison-player picker (single-export only; squad ZIP always uses the default benchmark) ---- */
+function prFilterCompare(q) {
+  const dd = document.getElementById('prCompareDropdown');
+  const query = (q||'').trim().toLowerCase();
+  if (!query) { dd.style.display = 'none'; dd.innerHTML = ''; return; }
+  const matches = [...new Set(allData.map(d => d['Player Full Name']).filter(Boolean))]
+    .filter(p => p !== prState.player && p.toLowerCase().includes(query))
+    .sort().slice(0, 8);
+  if (!matches.length) { dd.style.display = 'none'; dd.innerHTML = ''; return; }
+  dd.innerHTML = matches.map(p => `<div onclick="prSetCompare('${p.replace(/'/g,"\\'")}\')"
+      style="padding:7px 10px;font-size:12px;cursor:pointer;color:var(--ink)"
+      onmouseover="this.style.background='var(--surf2)'" onmouseout="this.style.background='transparent'">${p}</div>`).join('');
+  dd.style.display = 'block';
+}
+function prSetCompare(name) {
+  prState.compareTo = name;
+  document.getElementById('prCompareSearch').value = '';
+  document.getElementById('prCompareDropdown').style.display = 'none';
+  document.getElementById('prCompareDropdown').innerHTML = '';
+  prRenderCompareSelected();
+}
+function prClearCompare() {
+  prState.compareTo = '';
+  document.getElementById('prCompareSearch').value = '';
+  prRenderCompareSelected();
+}
+function prRenderCompareSelected() {
+  const el = document.getElementById('prCompareSelected');
+  if (!el) return;
+  el.innerHTML = prState.compareTo
+    ? `Comparing against <strong style="color:var(--ink)">${prState.compareTo}</strong> &nbsp;·&nbsp; <a onclick="prClearCompare()" style="color:var(--mid);cursor:pointer;text-decoration:underline">use default</a>`
+    : `Default — same position, squad above`;
 }
 
 function prSetProgress(pct, msg) {
@@ -4928,7 +4974,7 @@ function prScore(row){
    If nobody plays that position in the squad above -> fall back to the
    squad-above average across ALL positions (so bars never go blank).        */
 function prIsRound(d){ var e=((d&&d['Event ID'])||'').trim(); return e.charAt(0).toUpperCase()==='R' && e.charAt(1)>='0' && e.charAt(1)<='9'; }
-function prRadarData(name, squad, position, isGK){
+function prRadarData(name, squad, position, isGK, compareTo){
   const metrics = isGK
     ? ['Impact Zones: 3 - 5 G (Impacts)','Impact Zones: 5 - 10 G (Impacts)','HSR (m)','Hard Accelerations (#)','Hard Decelerations (#)']
     : ['Distance (km)','Work Rate (m/min)','HSR (m)','Hard Accelerations (#)','Hard Decelerations (#)'];
@@ -4938,26 +4984,41 @@ function prRadarData(name, squad, position, isGK){
   const units  = isGK ? ['','','m','',''] : ['','','m','',''];
   const dp     = isGK ? [0,0,0,0,0]       : [1,0,0,0,0];
 
-  const idx = SQUAD_ORDER_PR.indexOf(squad);
-  const peerSquad = (idx === SQUAD_ORDER_PR.length-1)
-    ? SQUAD_ORDER_PR[idx-1]          // First grade -> 20s
-    : SQUAD_ORDER_PR[idx+1];         // everyone else -> squad above
+  const playerRows = prGetGameRows(name, 0).filter(prIsRound);
+  const you = metrics.map(m => prAvg(playerRows, m));
+
+  // explicit comparison player chosen on export -> benchmark off their own season averages
+  if(compareTo){
+    const cRows = prGetGameRows(compareTo, 0).filter(prIsRound);
+    const target = metrics.map(m => prAvg(cRows, m));
+    return { labels, units, dp, you, target,
+             peerScope: compareTo, peerCount: 1, posFallback:false, compareTo };
+  }
+
+  // default benchmark = the squad(s) above, same position
+  // MYL 18 sits below both senior squads, so it's measured against both
+  let peerSquads;
+  if(squad === 'MYL 18') peerSquads = ['MSnr 20','MSnr 1st'];
+  else {
+    const idx = SQUAD_ORDER_PR.indexOf(squad);
+    const above = (idx === SQUAD_ORDER_PR.length-1)
+      ? SQUAD_ORDER_PR[idx-1]        // First grade -> 20s
+      : SQUAD_ORDER_PR[idx+1];       // everyone else -> squad above
+    peerSquads = above ? [above] : [];
+  }
 
   const groupRows = pos => allData.filter(d =>
     prIsRound(d) &&
-    d['Squad']===peerSquad &&
+    peerSquads.includes(d['Squad']) &&
     (d['Tags']||'').toLowerCase().trim()==='game' &&
     d['Split Name']==='Full Game' &&
     +d['Mins Played']>=45 &&
     d['Player Full Name']!==name &&
     (pos===null || d['Position']===position));
 
-  let peerRows = peerSquad ? groupRows(position) : [];
+  let peerRows = peerSquads.length ? groupRows(position) : [];
   let posFallback=false;
-  if(peerSquad && peerRows.length===0){ peerRows = groupRows(null); posFallback=true; }
-
-  const playerRows = prGetGameRows(name, 0).filter(prIsRound);
-  const you = metrics.map(m => prAvg(playerRows, m));
+  if(peerSquads.length && peerRows.length===0){ peerRows = groupRows(null); posFallback=true; }
 
   // benchmark = mean of per-player averages in the target group
   const peerPlayers = [...new Set(peerRows.map(d=>d['Player Full Name']))];
@@ -4966,14 +5027,16 @@ function prRadarData(name, squad, position, isGK){
     return a.length ? a.reduce((x,y)=>x+y,0)/a.length : null;
   });
 
+  const peerScope = peerSquads.length>1 ? peerSquads.join(' & ') : (peerSquads[0] || squad);
   return { labels, units, dp, you, target,
-           peerScope: peerSquad || squad, peerCount: peerPlayers.length, posFallback };
+           peerScope, peerCount: peerPlayers.length, posFallback };
 }
 
+const PR_PRIORITY_LABELS=['Distance','Work Rate','HSR'];
 function prVerdict(m){
   const L=m.radar.labels, you=m.radar.you, tgt=m.radar.target;
   const POS=(m.position||'player').toUpperCase();
-  const rows=L.map((l,i)=>({p:PR_METRIC_PHRASE[l]||l.toLowerCase(),
+  const rows=L.map((l,i)=>({l, p:PR_METRIC_PHRASE[l]||l.toLowerCase(),
                             r:(tgt[i]&&you[i]!=null)?you[i]/tgt[i]:0,
                             at:(you[i]!=null&&tgt[i]!=null&&you[i]>=tgt[i])}));
   const valid=rows.filter(o=>o.r>0);
@@ -4982,7 +5045,13 @@ function prVerdict(m){
   const strong=byR.slice(0,2).map(o=>o.p);
   const achieved=rows.filter(o=>o.at);
   const below=byR.filter(o=>!o.at);
-  const growth=below.length?below[below.length-1].p:null;
+  // Distance, Work Rate and HSR are the priority metrics to chase — only point
+  // to Hard Acc/Dec once a player is already at level on all three of those.
+  const prioBelow=below.filter(o=>PR_PRIORITY_LABELS.includes(o.l));
+  const otherBelow=below.filter(o=>!PR_PRIORITY_LABELS.includes(o.l));
+  const growthRow = prioBelow.length ? prioBelow[prioBelow.length-1]
+    : (otherBelow.length ? otherBelow[otherBelow.length-1] : null);
+  const growth = growthRow ? growthRow.p : null;
   let s=`A high-volume ${POS} — ${strong[0]} and ${strong[1]} are real strengths.`;
   if(achieved.length>=4) s+=` Already performing at ${m.peerScope} level across the board.`;
   else if(achieved.length) s+=` Already matching the ${m.peerScope} on ${achieved.length>=3?'several metrics':prList(achieved.map(o=>o.p))}.`;
@@ -4991,10 +5060,21 @@ function prVerdict(m){
 }
 function prList(a){ return a.length<=1?a.join(''):a.slice(0,-1).join(', ')+' and '+a[a.length-1]; }
 
-function prModel(name){
+/* Standout game = best combination of work rate AND total distance, each
+   normalized against the player's own season range — so a high-intensity
+   cameo can't outrank a full shift that was strong on both fronts. */
+function prStandoutGame(games){
+  if(!games.length) return null;
+  const wr=g=>+g['Work Rate (m/min)']||0, ds=g=>+g['Distance (km)']||0;
+  const wrMax=Math.max(...games.map(wr))||1, dsMax=Math.max(...games.map(ds))||1;
+  const score=g=> wr(g)/wrMax + ds(g)/dsMax;
+  return games.reduce((a,b)=> score(b)>score(a) ? b : a);
+}
+
+function prModel(name, compareTo){
   const squad=prGetPlayerSquad(name), position=prGetPlayerPosition(name), isGK=prIsGK(name);
   const games=prGetGameRows(name,0).filter(prIsRound), training=prGetTrainingRows(name);
-  const best = games.length ? games.reduce((a,b)=> (+b['Work Rate (m/min)']||0) > (+a['Work Rate (m/min)']||0) ? b : a) : null;
+  const best = prStandoutGame(games);
 
   // three trend metrics (m1,m2,m3) — outfield vs GK
   const defs = isGK
@@ -5012,7 +5092,7 @@ function prModel(name){
              m1:+g[defs[0].col]||0, m2:+g[defs[1].col]||0, m3:+g[defs[2].col]||0 };
   });
 
-  const radar = prRadarData(name, squad, position, isGK);
+  const radar = prRadarData(name, squad, position, isGK, compareTo);
   const progress = radar.labels.map((l,i)=>({
     label: l==='HSR'?'High-Speed Running':(l==='Hard Acc'?'Hard Accelerations':(l==='Hard Dec'?'Hard Decelerations':l)),
     you: radar.you[i]||0, target: radar.target[i]||(radar.you[i]||1),
@@ -5057,9 +5137,9 @@ function prModel(name){
     seasonLabel:'Season 2025/26',  // <-- set your season label here if you track it
     dateRange: prDateRangeSafe(games),
     genDate: new Date().toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric'}),
-    headshotB64:null, crestB64:null,
+    crestB64:null,
     games: games.length, totalMins: Math.round(prSum(games,'Mins Played')||0),
-    avgMins: Math.round(prAvg(games,'Mins Played')||0),
+    totalDistance: prSum(games,'Distance (km)')||0,
     topSpeed: prPeak(games,'Top Speed (km/h)')||0, topSpeedPB:true,
     gamesNote: games.length+' games recorded',
     best:bestObj, series, trendDefs:defs,
@@ -5078,7 +5158,6 @@ function prDateRangeSafe(rows){
 
 /* promisified asset loaders (reuse existing rpt* loaders) */
 function prAssetP(src){ return new Promise(r=>rptGetAsset(src,(b)=>r(b||null))); }
-function prHeadshotP(name){ return new Promise(r=>rptGetHeadshot(name,(b)=>r(b||null))); }
 function prLogoP(evId){ return new Promise(r=>{ if(!evId){r(null);return;} rptGetLogo(evId,(b)=>r(b||null)); }); }
 
 /* ============================================================================
@@ -5113,7 +5192,7 @@ function prTrendChart(p){
         <text x="${x.toFixed(1)}" y="${(ly-0.6).toFixed(1)}" text-anchor="middle" font-family="${PR_FB}" font-size="7.5" font-weight="700" fill="${MTX[md]}">${t}</text>`;}
     return `<text x="${x.toFixed(1)}" y="${ly.toFixed(1)}" text-anchor="middle" font-family="${PR_FB}" font-size="7.3" font-weight="700" fill="${PR_C.ink2}">${prNum(v,p.dp)}</text>`;}).join('');
   // bottom: crest + score (if any) + small arrow + minutes recorded
-  const cy1=bot+9, sy=cy1+17, arY=cy1+24, mvy=cy1+33;
+  const cy1=bot+9, sy=cy1+22, arY=cy1+29, mvy=cy1+38;
   const axis=p.rows.map((r,i)=>{const x=xP(i);
     const mark=r.logoB64
       ? `<image href="${r.logoB64}" xlink:href="${r.logoB64}" x="${(x-7).toFixed(1)}" y="${cy1}" width="14" height="14" preserveAspectRatio="xMidYMid meet"/>`
@@ -5127,7 +5206,8 @@ function prTrendChart(p){
     ${grid}<path d="M${axL},${bot} L${linePts.join(' L')} L${x1},${bot} Z" fill="url(#g${p.id})"/>${avgDash}
     <path d="M${linePts.join(' L')}" fill="none" stroke="${p.color}" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
     ${dots}${valueMarks}${avgPill}${axis}
-    <text x="1" y="${mvy.toFixed(1)}" text-anchor="start" font-family="${PR_FB}" font-size="5.5" font-weight="600" letter-spacing=".02em" fill="${PR_C.dim}">MINS RECORDED</text></svg>`;
+    <text x="1" y="${(mvy-4).toFixed(1)}" text-anchor="start" font-family="${PR_FB}" font-size="5.5" font-weight="600" letter-spacing=".02em" fill="${PR_C.dim}">MINS</text>
+    <text x="1" y="${(mvy+4).toFixed(1)}" text-anchor="start" font-family="${PR_FB}" font-size="5.5" font-weight="600" letter-spacing=".02em" fill="${PR_C.dim}">RECORDED</text></svg>`;
 }
 
 function prRadarChart(R){
@@ -5190,7 +5270,7 @@ function prRenderPage1(m){
         <span style="font-family:${PR_FB};font-size:9px;color:${PR_C.dim}">${def.unit} · season avg</span></div>
       ${prTrendChart({id:def.key,color:def.color,dp:def.dp,rows})}</div>`;
   };
-  const tiles=[['Games',m.games,false],['Minutes',prNum(m.totalMins),false],['Avg / Game',m.avgMins+"′",false],['Top Speed',prNum(m.topSpeed,1),m.topSpeedPB]]
+  const tiles=[['Games',m.games,false],['Minutes',prNum(m.totalMins),false],['Total Distance',prNum(m.totalDistance,1)+'km',false],['Top Speed',prNum(m.topSpeed,1),m.topSpeedPB]]
     .map(([l,v,pb])=>`<div style="background:${PR_C.card};border:1px solid ${PR_C.hair};border-radius:8px;box-shadow:${PR_C.sh};padding:9px 11px">
       <div style="font-family:${PR_FB};font-size:8px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:${PR_C.mut}">${l}</div>
       <div style="display:flex;align-items:baseline;gap:5px"><span style="font-family:${PR_FD};font-size:27px;line-height:1;color:${PR_C.ink}">${v}</span>
@@ -5215,16 +5295,13 @@ function prRenderPage1(m){
            <span style="position:absolute;left:50%;top:58%;transform:translate(-50%,-50%);font-family:${PR_FD};font-size:58px;color:${PR_C.ink};opacity:.95">${m.jersey||''}</span>
          </div></div>`
     : initials;
-  const hs=m.headshotB64
-    ? `<div style="position:absolute;inset:0;background-image:url('${m.headshotB64}');background-size:cover;background-position:top center"></div><div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(247,246,242,0) 55%,rgba(247,246,242,.5) 100%)"></div>`
-    : kit;
 
   return `<div style="width:1122px;height:794px;background:${PR_C.bg};font-family:${PR_FB};display:flex;flex-direction:column">
     ${prMasthead(m,'ATHLETIC PERFORMANCE REVIEW · GPS')}
     <div style="flex:1;display:flex;min-height:0">
       <div style="width:332px;flex:0 0 332px;background:${PR_C.bg};border-right:1px solid ${PR_C.hair};padding:18px;display:flex;flex-direction:column;gap:13px">
         <div style="position:relative;height:226px;border-radius:12px;overflow:hidden;border:1px solid ${PR_C.hair};background:radial-gradient(120% 90% at 50% 0%, #ffffff 0%, #e9e8e1 100%)">
-          <span style="position:absolute;right:-6px;bottom:-34px;font-family:${PR_FD};font-size:168px;color:${PR_C.ghost};line-height:1">${m.jersey}</span>${hs}
+          <span style="position:absolute;right:-6px;bottom:-34px;font-family:${PR_FD};font-size:168px;color:${PR_C.ghost};line-height:1">${m.jersey}</span>${kit}
           <div style="position:absolute;top:11px;left:11px;font-family:${PR_FB};font-size:9px;font-weight:700;letter-spacing:.06em;background:${PR_C.ink};color:${PR_C.y};border-radius:4px;padding:3px 7px">${m.posShort}</div>
           <div style="position:absolute;top:11px;right:11px;font-family:${PR_FB};font-size:9px;font-weight:600;letter-spacing:.04em;color:${PR_C.mut};background:rgba(255,255,255,.85);border:1px solid ${PR_C.hair};border-radius:4px;padding:3px 7px">${m.squad}</div></div>
         <div><div style="width:30px;height:4px;background:${PR_C.y};border-radius:1px;margin-bottom:7px"></div>
@@ -5238,18 +5315,23 @@ function prRenderPage1(m){
         <div style="display:flex;align-items:center;justify-content:space-between">${prSectionTitle('SEASON TREND · MATCH BY MATCH')}
           <div style="display:flex;gap:13px;font-family:${PR_FB};font-size:9px;font-weight:600;color:${PR_C.mut}"><span style="color:${PR_C.win}">● Win</span><span style="color:${PR_C.draw}">● Draw</span><span style="color:${PR_C.loss}">● Loss</span></div></div>
         <div style="background:${PR_C.card};border:1px solid ${PR_C.hair};box-shadow:${PR_C.sh};border-left:3px solid ${PR_C.y};border-radius:8px;padding:9px 13px;display:flex;align-items:center;gap:12px">
-          <p style="font-family:${PR_FB};font-size:11.5px;line-height:1.4;color:${PR_C.ink2};flex:1;margin:0">${m.verdict}</p>
-          <span style="font-family:${PR_FB};font-size:7.5px;font-weight:600;color:${PR_C.faint};letter-spacing:.08em;white-space:nowrap">✎ EDITABLE</span></div>
+          <p style="font-family:${PR_FB};font-size:11.5px;line-height:1.4;color:${PR_C.ink2};flex:1;margin:0">${m.verdict}</p></div>
         ${m.trendDefs.map(panel).join('')}
       </div></div>
     ${prFooter(m,'Page 1 / 2')}</div>`;
 }
 
 function prRenderPage2(m){
-  const sub = m.radar.posFallback
+  const sectionTitle = m.radar.compareTo ? 'PLAYER COMPARISON' : 'VS THE LEVEL ABOVE';
+  const legendLabel = m.radar.compareTo ? m.radar.compareTo : `Level above · ${m.peerScope}`;
+  const sub = m.radar.compareTo
+    ? `Your game-average shape against ${m.radar.compareTo}'s — a direct head-to-head comparison.`
+    : m.radar.posFallback
     ? `Your game-average shape against the ${m.peerScope} — the level you're aiming for next season.`
     : `Your game-average shape against ${m.position}s in the ${m.peerScope} — the level you're aiming for next season.`;
-  const demandsSub = m.radar.posFallback
+  const demandsSub = m.radar.compareTo
+    ? `What ${m.radar.compareTo} produces on average — compare your numbers directly. Each bar shows how close you already are.`
+    : m.radar.posFallback
     ? `What a typical ${m.peerScope} player produces — your targets for next season. Each bar shows how close you already are.`
     : `What a typical ${m.position} produces in the ${m.peerScope} — your targets for next season. Each bar shows how close you already are.`;
   const training=m.training.map(([l,v])=>`<div style="background:${PR_C.card};border:1px solid ${PR_C.hair};box-shadow:${PR_C.sh};border-radius:9px;padding:12px 13px">
@@ -5260,12 +5342,12 @@ function prRenderPage2(m){
     ${prMasthead(m,'PROFILE & DEVELOPMENT')}
     <div style="flex:1;display:flex;min-height:0">
       <div style="width:512px;flex:0 0 512px;border-right:1px solid ${PR_C.hair};padding:22px 24px;display:flex;flex-direction:column">
-        ${prSectionTitle('VS THE LEVEL ABOVE')}
+        ${prSectionTitle(sectionTitle)}
         <div style="font-family:${PR_FB};font-size:10.5px;color:${PR_C.mut};margin-top:6px;line-height:1.45;max-width:430px">${sub}</div>
         <div style="flex:1;display:flex;align-items:center;justify-content:center">${prRadarChart(m.radar)}</div>
         <div style="display:flex;gap:22px;justify-content:center;padding-top:4px">
           <span style="display:flex;align-items:center;gap:7px;font-family:${PR_FB};font-size:10px;font-weight:500;color:${PR_C.mut}"><span style="width:22px;height:3px;background:${PR_C.ink};border-radius:2px"></span>${m.firstName}</span>
-          <span style="display:flex;align-items:center;gap:7px;font-family:${PR_FB};font-size:10px;font-weight:500;color:${PR_C.mut}"><span style="width:22px;height:0;border-top:2px dashed ${PR_C.mut}"></span>Level above · ${m.peerScope}</span></div></div>
+          <span style="display:flex;align-items:center;gap:7px;font-family:${PR_FB};font-size:10px;font-weight:500;color:${PR_C.mut}"><span style="width:22px;height:0;border-top:2px dashed ${PR_C.mut}"></span>${legendLabel}</span></div></div>
       <div style="flex:1;min-width:0;padding:22px 24px;display:flex;flex-direction:column;gap:18px">
         <div>${prSectionTitle('THE NEXT LEVEL · ATHLETIC DEMANDS')}
           <div style="font-family:${PR_FB};font-size:10px;color:${PR_C.mut};margin:6px 0 14px;line-height:1.45;max-width:480px">${demandsSub}</div>
@@ -5278,20 +5360,19 @@ function prRenderPage2(m){
 /* ============================================================================
    DROP-IN OVERRIDES  (same signatures the export pipeline already calls)
    ========================================================================== */
-async function prBuildPage1HTML(playerName, crestB64){
-  const m = prModel(playerName);
+async function prBuildPage1HTML(playerName, crestB64, compareTo){
+  const m = prModel(playerName, compareTo);
   m.crestB64 = crestB64 || null;
-  const [hs, kit] = await Promise.all([
-    prHeadshotP(playerName),
+  const [kit] = await Promise.all([
     prAssetP('kit.png'),
     Promise.all(m.series.map(g => prLogoP(g.evId).then(b => { g.logoB64 = b; })))
   ]);
-  m.headshotB64 = hs; m.kitB64 = kit;
+  m.kitB64 = kit;
   if(m.best) m.best.logoB64 = await prLogoP(m.best.evId);
   return prRenderPage1(m);
 }
-function prBuildPage2HTML(playerName, crestB64){
-  const m = prModel(playerName);
+function prBuildPage2HTML(playerName, crestB64, compareTo){
+  const m = prModel(playerName, compareTo);
   m.crestB64 = crestB64 || null;
   return prRenderPage2(m);
 }
@@ -5311,15 +5392,15 @@ async function prRenderPageToPDF(doc, html, pageIndex) {
   zone.innerHTML = '';
 }
 
-async function prGeneratePlayerPDF(playerName) {
+async function prGeneratePlayerPDF(playerName, compareTo) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [297,210] });
   const crestB64 = await new Promise(r => rptGetAsset('Logo.png', b => r(b)));
   prSetProgress(20, 'Building page 1…');
-  const page1 = await prBuildPage1HTML(playerName, crestB64);
+  const page1 = await prBuildPage1HTML(playerName, crestB64, compareTo);
   await prRenderPageToPDF(doc, page1, 0);
   prSetProgress(60, 'Building page 2…');
-  const page2 = prBuildPage2HTML(playerName, crestB64);
+  const page2 = prBuildPage2HTML(playerName, crestB64, compareTo);
   await prRenderPageToPDF(doc, page2, 1);
   return doc;
 }
@@ -5330,7 +5411,7 @@ async function prExportSingle() {
   btn.disabled = true; btn.textContent = 'Generating…';
   prSetProgress(10, 'Loading assets…');
   try {
-    const doc = await prGeneratePlayerPDF(prState.player);
+    const doc = await prGeneratePlayerPDF(prState.player, prState.compareTo || null);
     prSetProgress(95, 'Saving PDF…');
     doc.save(`${prState.player.replace(/\s+/g,'_')}_GPS_Report.pdf`);
     prSetProgress(100, 'Done!');
@@ -5401,6 +5482,15 @@ if(sessionStorage.getItem('gps_auth')==='1'){
         </div>
         <div id="prPlayerList" style="flex:1;overflow-y:auto;padding:.5rem"></div>
       </div>
+    </div>
+    <div id="prCompareRow" style="display:none;padding:.85rem 1.5rem;border-top:1px solid var(--border);position:relative">
+      <div style="font-size:10px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--mid);margin-bottom:.45rem">Compare to (optional, single export only)</div>
+      <div style="display:flex;gap:.5rem;align-items:center">
+        <input type="text" id="prCompareSearch" placeholder="Search a player to compare against…" oninput="prFilterCompare(this.value)"
+          autocomplete="off" style="flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:var(--r);font-family:var(--font-b);font-size:12px;background:var(--surf2);color:var(--ink);outline:none">
+      </div>
+      <div id="prCompareDropdown" style="display:none;position:absolute;left:1.5rem;right:1.5rem;top:100%;margin-top:-2px;background:var(--surf);border:1px solid var(--border);border-radius:var(--r);max-height:160px;overflow-y:auto;z-index:20;box-shadow:0 6px 20px rgba(0,0,0,.25)"></div>
+      <div id="prCompareSelected" style="margin-top:.4rem;font-size:11px;color:var(--mid)">Default — same position, squad above</div>
     </div>
     <div style="padding:1rem 1.5rem;border-top:1px solid var(--border);display:flex;align-items:center;gap:.75rem;background:var(--surf2)">
       <div style="flex:1;font-size:12px;color:var(--mid)" id="prSelectedLabel">No player selected</div>
