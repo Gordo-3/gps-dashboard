@@ -4914,9 +4914,12 @@ function prOppCode(nm){
   return w.map(x=>x[0]).join('').slice(0,4).toUpperCase();
 }
 function prScore(row){
-  const r=row['Result']||''; const m=r.match(/(\d+)\s*[-–]\s*(\d+)\s*([WDL])/i);
+  const r=(row['Result']||'').trim();
+  if(!r) return { score:'', result:'' };
+  const m=r.match(/(\d+)\s*[-–]\s*(\d+)\s*([WDL])/i);
   if(m) return { score:`${m[1]}–${m[2]}`, result:m[3].toUpperCase() };
-  const rr=r.toUpperCase(); return { score:'', result: rr.includes('W')?'W':rr.includes('L')?'L':'D' };
+  const rr=r.toUpperCase();
+  return { score:'', result: rr.includes('W')?'W':rr.includes('L')?'L':(rr.includes('D')?'D':'') };
 }
 
 /* NEW radar / benchmark logic ----------------------------------------------
@@ -4924,6 +4927,7 @@ function prScore(row){
    First grade (top squad) borrows the squad below (20s).
    If nobody plays that position in the squad above -> fall back to the
    squad-above average across ALL positions (so bars never go blank).        */
+function prIsRound(d){ var e=((d&&d['Event ID'])||'').trim(); return e.charAt(0).toUpperCase()==='R' && e.charAt(1)>='0' && e.charAt(1)<='9'; }
 function prRadarData(name, squad, position, isGK){
   const metrics = isGK
     ? ['Impact Zones: 3 - 5 G (Impacts)','Impact Zones: 5 - 10 G (Impacts)','HSR (m)','Hard Accelerations (#)','Hard Decelerations (#)']
@@ -4940,6 +4944,7 @@ function prRadarData(name, squad, position, isGK){
     : SQUAD_ORDER_PR[idx+1];         // everyone else -> squad above
 
   const groupRows = pos => allData.filter(d =>
+    prIsRound(d) &&
     d['Squad']===peerSquad &&
     (d['Tags']||'').toLowerCase().trim()==='game' &&
     d['Split Name']==='Full Game' &&
@@ -4951,7 +4956,7 @@ function prRadarData(name, squad, position, isGK){
   let posFallback=false;
   if(peerSquad && peerRows.length===0){ peerRows = groupRows(null); posFallback=true; }
 
-  const playerRows = prGetGameRows(name, 0);
+  const playerRows = prGetGameRows(name, 0).filter(prIsRound);
   const you = metrics.map(m => prAvg(playerRows, m));
 
   // benchmark = mean of per-player averages in the target group
@@ -4988,8 +4993,8 @@ function prList(a){ return a.length<=1?a.join(''):a.slice(0,-1).join(', ')+' and
 
 function prModel(name){
   const squad=prGetPlayerSquad(name), position=prGetPlayerPosition(name), isGK=prIsGK(name);
-  const games=prGetGameRows(name,0), training=prGetTrainingRows(name);
-  const best=prBestGame(name,squad);
+  const games=prGetGameRows(name,0).filter(prIsRound), training=prGetTrainingRows(name);
+  const best = games.length ? games.reduce((a,b)=> (+b['Work Rate (m/min)']||0) > (+a['Work Rate (m/min)']||0) ? b : a) : null;
 
   // three trend metrics (m1,m2,m3) — outfield vs GK
   const defs = isGK
@@ -5080,11 +5085,11 @@ function prLogoP(evId){ return new Promise(r=>{ if(!evId){r(null);return;} rptGe
    SVG / HTML PIECES  (identical look to the approved light preview)
    ========================================================================== */
 function prTrendChart(p){
-  const W=726,H=146,axL=46,axR=14,top=8,bot=74,x0=axL,x1=W-axR;
+  const W=726,H=146,axL=46,axR=14,top=8,bot=84,x0=axL,x1=W-axR;
   const vals=p.rows.map(r=>r.val), n=vals.length||1;
   if(!p.rows.length) return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:${H}px"><text x="${W/2}" y="${H/2}" text-anchor="middle" font-family="${PR_FB}" font-size="11" fill="${PR_C.dim}">No game data</text></svg>`;
   const avg=prMean(vals), peak=Math.max(...vals), low=Math.min(...vals);
-  let lo=Math.max(0, Math.min(low,avg)-(peak-low)*0.22), hi=peak+(peak-low)*0.16 || peak*1.1; if(hi<=lo) hi=lo+1;
+  let lo=Math.max(0, Math.min(low,avg)-(peak-low)*0.22), hi=peak+(peak-low)*0.22 || peak*1.1; if(hi<=lo) hi=lo+1;
   const xP=i=> n===1?(x0+x1)/2 : x0+(i/(n-1))*(x1-x0);
   const yP=v=> bot-((v-lo)/(hi-lo))*(bot-top);
   const grid=[lo,(lo+hi)/2,hi].map(t=>{const y=yP(t);
@@ -5092,33 +5097,37 @@ function prTrendChart(p){
       <text x="${axL-7}" y="${(y+3).toFixed(1)}" text-anchor="end" font-family="${PR_FB}" font-size="8.5" fill="${PR_C.dim}">${prNum(t,p.dp)}</text>`;}).join('');
   const linePts=vals.map((v,i)=>`${xP(i).toFixed(1)},${yP(v).toFixed(1)}`);
   const ay=yP(avg);
-  const avgLine=`<line x1="${axL}" y1="${ay.toFixed(1)}" x2="${x1}" y2="${ay.toFixed(1)}" stroke="${p.color}" stroke-width="1.2" stroke-dasharray="5,4" opacity=".5"/>
-    <text x="${x1-2}" y="${(ay-5).toFixed(1)}" text-anchor="end" font-family="${PR_FB}" font-weight="600" font-size="8.5" fill="${p.color}">avg ${prNum(avg,p.dp)}</text>`;
-  // rank top-3 games by this metric for medals
+  const avgDash=`<line x1="${axL}" y1="${ay.toFixed(1)}" x2="${x1}" y2="${ay.toFixed(1)}" stroke="${p.color}" stroke-width="1.2" stroke-dasharray="5,4" opacity=".5"/>`;
+  const avgTxt='avg '+prNum(avg,p.dp), aw=avgTxt.length*4.7+9;
+  const avgPill=`<rect x="${(x1-aw).toFixed(1)}" y="${(ay-7).toFixed(1)}" width="${aw.toFixed(1)}" height="14" rx="3" fill="${PR_C.card}" stroke="${PR_C.hair}" stroke-width="1"/>
+    <text x="${(x1-4).toFixed(1)}" y="${(ay+3).toFixed(1)}" text-anchor="end" font-family="${PR_FB}" font-weight="700" font-size="8.5" fill="${p.color}">${avgTxt}</text>`;
+  // top-3 games by this metric -> medals
   const rank={}; vals.map((v,i)=>({v,i})).sort((a,b)=>b.v-a.v).slice(0,3).forEach((o,r)=>{rank[o.i]=r;});
   const MED=['🥇','🥈','🥉'], MBG=[PR_C.y,'#cfd0d6','#cd8a52'], MTX=['#111','#111','#fff'];
   const dots=vals.map((v,i)=>{const k=rank[i]===0;return `<circle cx="${xP(i).toFixed(1)}" cy="${yP(v).toFixed(1)}" r="${k?4.4:3}" fill="${k?p.color:PR_C.card}" stroke="${p.color}" stroke-width="${k?2:1.7}"/>`;}).join('');
-  const cy1=bot+8, vy=cy1+15, sy=cy1+36, my0=cy1+40, my1=cy1+49;
-  const maxMin=Math.max(...p.rows.map(r=>r.mins),90);
-  const axis=p.rows.map((r,i)=>{const x=xP(i), md=rank[i];
-    const mark = r.logoB64
+  // value labels at the dots (alternate above/below; medal chips for top-3)
+  const valueMarks=vals.map((v,i)=>{const x=xP(i),py=yP(v),md=rank[i];
+    let ly=(i%2===0)?py-12:py+16; if(ly<13)ly=py+16; if(ly>bot)ly=py-12;
+    if(md!=null){const t=MED[md]+' '+prNum(v,p.dp), cw=t.length*4.0+13;
+      return `<rect x="${(x-cw/2).toFixed(1)}" y="${(ly-10).toFixed(1)}" width="${cw.toFixed(1)}" height="13" rx="3" fill="${MBG[md]}"/>
+        <text x="${x.toFixed(1)}" y="${(ly-0.6).toFixed(1)}" text-anchor="middle" font-family="${PR_FB}" font-size="7.5" font-weight="700" fill="${MTX[md]}">${t}</text>`;}
+    return `<text x="${x.toFixed(1)}" y="${ly.toFixed(1)}" text-anchor="middle" font-family="${PR_FB}" font-size="7.3" font-weight="700" fill="${PR_C.ink2}">${prNum(v,p.dp)}</text>`;}).join('');
+  // bottom: crest + score (if any) + small arrow + minutes recorded
+  const cy1=bot+9, sy=cy1+17, arY=cy1+24, mvy=cy1+33;
+  const axis=p.rows.map((r,i)=>{const x=xP(i);
+    const mark=r.logoB64
       ? `<image href="${r.logoB64}" xlink:href="${r.logoB64}" x="${(x-7).toFixed(1)}" y="${cy1}" width="14" height="14" preserveAspectRatio="xMidYMid meet"/>`
       : `<rect x="${(x-11).toFixed(1)}" y="${cy1}" width="22" height="13" rx="3.5" fill="${PR_C.inset}" stroke="${PR_C.hair}" stroke-width="1"/><text x="${x.toFixed(1)}" y="${(cy1+9.2).toFixed(1)}" text-anchor="middle" font-family="${PR_FB}" font-size="7" font-weight="500" fill="${PR_C.mut}">${r.code}</text>`;
-    const valTxt=(md!=null?MED[md]+' ':'')+prNum(r.val,p.dp);
-    const cw=Math.max(22, valTxt.length*4.4 + (md!=null?11:0) + 8);
-    const chip=`<rect x="${(x-cw/2).toFixed(1)}" y="${vy}" width="${cw.toFixed(1)}" height="14" rx="3.5" fill="${md!=null?MBG[md]:'#16161a'}"/>
-      <text x="${x.toFixed(1)}" y="${(vy+10).toFixed(1)}" text-anchor="middle" font-family="${PR_FB}" font-size="8" font-weight="700" fill="${md!=null?MTX[md]:'#fff'}">${valTxt}</text>`;
-    const score=`<text x="${x.toFixed(1)}" y="${sy.toFixed(1)}" text-anchor="middle" font-family="${PR_FB}" font-size="7.5" font-weight="700" fill="${prResCol(r.result)}">${r.score}${r.result}</text>`;
-    const h=Math.max(2,(r.mins/maxMin)*(my1-my0));
-    const minsmark=`<rect x="${(x-6).toFixed(1)}" y="${(my1-h).toFixed(1)}" width="12" height="${h.toFixed(1)}" rx="1.5" fill="${PR_C.dim}"/>
-      <text x="${x.toFixed(1)}" y="${(my1+9).toFixed(1)}" text-anchor="middle" font-family="${PR_FB}" font-size="7" font-weight="600" fill="${PR_C.ink}">${Math.round(r.mins)}</text>`;
-    return mark+chip+score+minsmark;}).join('');
+    const score=(r.result||r.score)?`<text x="${x.toFixed(1)}" y="${sy.toFixed(1)}" text-anchor="middle" font-family="${PR_FB}" font-size="7.5" font-weight="700" fill="${prResCol(r.result)}">${r.score}${r.result}</text>`:'';
+    const arrow=`<text x="${x.toFixed(1)}" y="${arY.toFixed(1)}" text-anchor="middle" font-family="${PR_FB}" font-size="7" fill="${PR_C.faint}">↓</text>`;
+    const mins=`<text x="${x.toFixed(1)}" y="${mvy.toFixed(1)}" text-anchor="middle" font-family="${PR_FB}" font-size="8" font-weight="600" fill="${PR_C.ink}">${Math.round(r.mins)}</text>`;
+    return mark+score+arrow+mins;}).join('');
   return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:${H}px;overflow:visible">
     <defs><linearGradient id="g${p.id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${p.color}" stop-opacity=".16"/><stop offset="1" stop-color="${p.color}" stop-opacity="0"/></linearGradient></defs>
-    ${grid}<path d="M${axL},${bot} L${linePts.join(' L')} L${x1},${bot} Z" fill="url(#g${p.id})"/>${avgLine}
+    ${grid}<path d="M${axL},${bot} L${linePts.join(' L')} L${x1},${bot} Z" fill="url(#g${p.id})"/>${avgDash}
     <path d="M${linePts.join(' L')}" fill="none" stroke="${p.color}" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
-    ${dots}${axis}
-    <text x="${axL-7}" y="${(my1+5).toFixed(1)}" text-anchor="end" font-family="${PR_FB}" font-size="7" fill="${PR_C.dim}">MIN</text></svg>`;
+    ${dots}${valueMarks}${avgPill}${axis}
+    <text x="1" y="${mvy.toFixed(1)}" text-anchor="start" font-family="${PR_FB}" font-size="5.5" font-weight="600" letter-spacing=".02em" fill="${PR_C.dim}">MINS RECORDED</text></svg>`;
 }
 
 function prRadarChart(R){
@@ -5191,7 +5200,7 @@ function prRenderPage1(m){
   const bgCard = b ? `<div style="background:${PR_C.card};border:1px solid ${PR_C.hair};box-shadow:${PR_C.sh};border-radius:9px;padding:11px 12px;border-left:3px solid ${PR_C.y}">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
         <span style="font-family:${PR_FD};font-size:10px;letter-spacing:.06em;color:${PR_C.ink}">STANDOUT GAME · ATHLETIC PERFORMANCE</span>
-        <span style="font-family:${PR_FB};font-size:11px;font-weight:700;color:${prResCol(b.result)}">${b.score} ${b.result}</span></div>
+        ${(b.result||b.score)?`<span style="font-family:${PR_FB};font-size:11px;font-weight:700;color:${prResCol(b.result)}">${b.score} ${b.result}</span>`:''}</div>
       <div style="display:flex;align-items:center;gap:9px;margin-bottom:10px">
         ${b.logoB64?`<img src="${b.logoB64}" style="width:30px;height:30px;object-fit:contain">`:`<div style="width:30px;height:30px;border-radius:6px;background:${PR_C.inset};border:1px solid ${PR_C.hair};display:flex;align-items:center;justify-content:center;font-family:${PR_FB};font-size:8.5px;font-weight:700;color:${PR_C.mut}">${b.code}</div>`}
         <div><div style="font-family:${PR_FB};font-size:12px;font-weight:700;color:${PR_C.ink};line-height:1.1">vs ${b.oppFull}</div>
@@ -5200,8 +5209,11 @@ function prRenderPage1(m){
 
   const initials = `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center"><span style="font-family:${PR_FD};font-size:108px;color:${PR_C.ink};opacity:.9">${(m.firstName[0]||'')}${(m.surname[0]||'')}</span></div>`;
   const kit = m.kitB64
-    ? `<div style="position:absolute;inset:0;background-image:url('${m.kitB64}');background-size:contain;background-position:center;background-repeat:no-repeat"></div>
-       <span style="position:absolute;left:50%;top:57%;transform:translate(-50%,-50%);font-family:${PR_FD};font-size:76px;color:${PR_C.ink};opacity:.95">${m.jersey||''}</span>`
+    ? `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
+         <div style="position:relative;width:82%;height:82%">
+           <div style="position:absolute;inset:0;background-image:url('${m.kitB64}');background-size:contain;background-position:center;background-repeat:no-repeat"></div>
+           <span style="position:absolute;left:50%;top:58%;transform:translate(-50%,-50%);font-family:${PR_FD};font-size:58px;color:${PR_C.ink};opacity:.95">${m.jersey||''}</span>
+         </div></div>`
     : initials;
   const hs=m.headshotB64
     ? `<div style="position:absolute;inset:0;background-image:url('${m.headshotB64}');background-size:cover;background-position:top center"></div><div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(247,246,242,0) 55%,rgba(247,246,242,.5) 100%)"></div>`
