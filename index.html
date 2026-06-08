@@ -4939,6 +4939,7 @@ const prResCol = r => r==='W'?PR_C.win : r==='L'?PR_C.loss : PR_C.draw;
 /* friendly labels for the verdict + positions (tweak to your taxonomy) */
 const PR_METRIC_PHRASE = {
   'Distance':'distance','Work Rate':'work rate','HSR':'high-speed running',
+  'Sprint':'sprint distance',
   'Hard Acc':'hard accelerations','Hard Dec':'hard decelerations',
   'Dives 3-5G':'lower-intensity dives','Dives 5-10G':'high-intensity dives'
 };
@@ -4977,11 +4978,11 @@ function prIsRound(d){ var e=((d&&d['Event ID'])||'').trim(); return e.charAt(0)
 function prRadarData(name, squad, position, isGK, compareTo){
   const metrics = isGK
     ? ['Impact Zones: 3 - 5 G (Impacts)','Impact Zones: 5 - 10 G (Impacts)','HSR (m)','Hard Accelerations (#)','Hard Decelerations (#)']
-    : ['Distance (km)','Work Rate (m/min)','HSR (m)','Hard Accelerations (#)','Hard Decelerations (#)'];
+    : ['Distance (km)','Work Rate (m/min)','Hard Accelerations (#)','Sprint Distance (m)','HSR (m)'];
   const labels = isGK
     ? ['Dives 3-5G','Dives 5-10G','HSR','Hard Acc','Hard Dec']
-    : ['Distance','Work Rate','HSR','Hard Acc','Hard Dec'];
-  const units  = isGK ? ['','','m','',''] : ['','','m','',''];
+    : ['Distance','Work Rate','Hard Acc','Sprint','HSR'];
+  const units  = isGK ? ['','','m','',''] : ['','','','m','m'];
   const dp     = isGK ? [0,0,0,0,0]       : [1,0,0,0,0];
 
   const playerRows = prGetGameRows(name, 0).filter(prIsRound);
@@ -5379,8 +5380,24 @@ function prBuildPage2HTML(playerName, crestB64, compareTo){
 /* ===================== END PLAYER REVIEW v3 ===================== */
 
 /* ===================== EXPORT FUNCTIONS ===================== */
+/* Pre-decode every embedded image (crests, kit, logos — often the SAME data URI
+   repeated across several charts) BEFORE it's inserted into the DOM. Without
+   this, html2canvas can snapshot the page before slower devices have finished
+   decoding/painting the first copy of an image, leaving it blank — while later
+   copies of that same (now-cached) image render fine. This is purely a wait;
+   it changes nothing for devices that were already decoding fast enough. */
+function prPredecodeImages(html) {
+  const srcs = [...new Set(html.match(/data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+/g) || [])];
+  return Promise.all(srcs.map(src => new Promise(res => {
+    const img = new Image();
+    img.onload = () => img.decode ? img.decode().then(res, res) : res();
+    img.onerror = res;
+    img.src = src;
+  })));
+}
 async function prRenderPageToPDF(doc, html, pageIndex) {
   const zone = document.getElementById('prRenderZone');
+  await prPredecodeImages(html);
   zone.innerHTML = html;
   await new Promise(r => setTimeout(r, 500));
   const canvas = await html2canvas(zone.firstElementChild, {
