@@ -1136,12 +1136,12 @@ function dateToInput(d){if(!d)return"";return d.getFullYear()+"-"+String(d.getMo
 function hsLastName(n){return(n||"").trim().split(" ").map(p=>p.charAt(0).toUpperCase()+p.slice(1).toLowerCase()).join(" ");}
 function imgEl(fullName,cls,size){
   const base=HEADSHOTS+hsLastName(fullName);
-  return'<img src="'+base+'.png" data-jpeg="'+base+'.jpeg" data-size="'+size+'" class="'+cls+'" style="width:'+size+'px;height:'+size+'px;border-radius:50%;object-fit:cover;flex-shrink:0;border:1px solid var(--border)" onerror="hsErr(this)">';
+  return'<img src="'+base+'.png" data-jpeg="'+base+'.jpeg" data-size="'+size+'" data-player="'+(fullName||'').replace(/"/g,'&quot;')+'" class="'+cls+'" style="width:'+size+'px;height:'+size+'px;border-radius:50%;object-fit:cover;flex-shrink:0;border:1px solid var(--border)" onerror="hsErr(this)">';
 }
-function hsErr(el){if(!el.dataset.tried){el.dataset.tried="1";el.src=el.dataset.jpeg;}else{const s=+(el.dataset.size)||28;if(el.id==='ppModalAva'){el.style.display='none';}else{el.outerHTML='<span style="width:'+s+'px;height:'+s+'px;border-radius:50%;flex-shrink:0;background:var(--borderl);display:inline-flex;align-items:center;justify-content:center;font-size:'+Math.round(s*.5)+'px">👤</span>';}}}
+function hsErr(el){if(!el.dataset.tried){el.dataset.tried="1";el.src=el.dataset.jpeg;return;}if(el.id==='ppModalAva'){el.style.display='none';return;}const s=+(el.dataset.size)||28;const nm=el.dataset.player||'';let num='';try{num=getJerseyNumber(nm);}catch(e){}const parts=nm.trim().split(' ').filter(Boolean);const initials=parts.length?(parts[0].charAt(0)+(parts.length>1?parts[parts.length-1].charAt(0):'')).toUpperCase():'?';const label=num||initials;el.outerHTML='<span id="'+(el.id||'')+'" class="'+(el.className||'')+'" style="width:'+s+'px;height:'+s+'px;border-radius:50%;flex-shrink:0;background:#17171b;border:1px solid var(--border);display:inline-flex;align-items:center;justify-content:center;font-family:\'Bebas Neue\',sans-serif;font-size:'+Math.round(s*.6)+'px;line-height:1;color:#FFE500">'+label+'</span>';}
 function setH2HAvatar(side,player){
   const base=HEADSHOTS+hsLastName(player);const id="h2hAva"+side;const oldEl=document.getElementById(id);if(!oldEl)return;
-  const img=document.createElement("img");img.id=id;img.dataset.jpeg=base+".jpeg";img.dataset.tried="";img.dataset.size="64";
+  const img=document.createElement("img");img.id=id;img.dataset.jpeg=base+".jpeg";img.dataset.tried="";img.dataset.size="64";img.dataset.player=player;
   img.style.cssText="width:64px;height:64px;border-radius:50%;object-fit:cover;border:2px solid var(--border);flex-shrink:0";
   img.className="h2h-big-ava";img.onerror=function(){hsErr(this);};img.src=base+".png";oldEl.replaceWith(img);
 }
@@ -1873,14 +1873,14 @@ function drawPlayer(data){
   if(ctrls.plAvg)legItems.push('<span class="li"><span style="width:18px;height:2px;background:var(--red);display:inline-block;border-radius:1px"></span>Squad avg</span>');
   document.getElementById("plLeg").innerHTML=legItems.join("");
   document.getElementById("plWrap").style.height=Math.max(260,ps.length*36+80)+"px";
-  const datasets=[{label:ml,data:ps.map(p=>+p.value.toFixed(2)),backgroundColor:ps.map((_,i)=>PAL[i%PAL.length]),borderRadius:4,order:2}];
+  const datasets=[{label:ml,data:ps.map(p=>+p.value.toFixed(2)),backgroundColor:'#6c6c74',borderRadius:4,order:2}];
   if(ctrls.plAvg)datasets.push({label:"Squad avg",data:ps.map(()=>+sqAvg.toFixed(2)),type:"line",borderColor:"#e63946",borderWidth:2,pointRadius:0,backgroundColor:"transparent",order:1});
   if(plci)plci.destroy();
   plci=new Chart(document.getElementById("plChart"),{type:"bar",data:{labels:ps.map(p=>p.n),datasets},options:{indexAxis:"y",responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:tt()},scales:{x:{ticks:{font:{size:11},color:"#777"},grid:{color:"rgba(0,0,0,0.04)"},border:{display:false}},y:{ticks:{font:{size:12},color:"#444"},grid:{display:false},border:{display:false}}}}});
   const mx=Math.max(...ps.map(p=>p.value),1);
   const _tags=new Set(data.map(d=>(d["Tags"]||"").toLowerCase().trim()).filter(Boolean));
   const _baselineSplit=_tags.size===1?(_tags.has("game")?"Full Game":_tags.has("training")?"Full Session":null):null;
-  document.getElementById("plRankRows").innerHTML=ps.map((p,i)=>{const pA=personalAvgAllTime(p.n,undefined,_baselineSplit);const devPct=pA>0?((p.personalAvg-pA)/pA*100):0;const arrow=devPct>2?"↑":devPct<-2?"↓":"→";const ac=devPct>2?"#22c55e":devPct<-2?"#e63946":"#aaa";return'<div class="rr"><span class="rn">'+(i+1)+'</span><span class="rtrend" style="color:'+ac+'">'+arrow+'</span>'+imgEl(p.n,"rava",28)+'<span class="rnm pp-trigger" data-player="'+p.n.replace(/"/g,'&quot;')+'" title="'+p.n+'">'+p.n+'</span><div class="rbw"><div class="rb" style="width:'+(p.value/mx*100).toFixed(1)+'%;background:'+PAL[i%PAL.length]+'"></div></div><span class="rv">'+p.value.toFixed(1)+'</span>'+(ctrls.deviation?'<span class="rdev '+(devPct>=0?"pos":"neg")+'">'+(devPct>=0?"+":"")+devPct.toFixed(1)+'%</span>':'')+'<span class="rmins">'+Math.round(p.mins)+' min</span></div>';}).join("");
+  document.getElementById("plRankRows").innerHTML=ps.map((p,i)=>{const pA=personalAvgAllTime(p.n,undefined,_baselineSplit);const devPct=pA>0?((p.personalAvg-pA)/pA*100):0;const arrow=devPct>2?"↑":devPct<-2?"↓":"→";const ac=devPct>2?"#22c55e":devPct<-2?"#e63946":"#aaa";return'<div class="rr"><span class="rn">'+(i+1)+'</span><span class="rtrend" style="color:'+ac+'">'+arrow+'</span>'+imgEl(p.n,"rava",28)+'<span class="rnm pp-trigger" data-player="'+p.n.replace(/"/g,'&quot;')+'" title="'+p.n+'">'+p.n+'</span><div class="rbw"><div class="rb" style="width:'+(p.value/mx*100).toFixed(1)+'%;background:#6c6c74"></div></div><span class="rv">'+p.value.toFixed(1)+'</span>'+(ctrls.deviation?'<span class="rdev '+(devPct>=0?"pos":"neg")+'">'+(devPct>=0?"+":"")+devPct.toFixed(1)+'%</span>':'')+'<span class="rmins">'+Math.round(p.mins)+' min</span></div>';}).join("");
 }
 
 /* TRACKING */
@@ -2121,7 +2121,7 @@ function drawRk(data){
     '<div class="phd"><div class="pt">Player Rankings — '+curMet+' ('+ml+')</div>'+
     '<div class="tog-group"><button class="tog-btn'+(rkMode==="sum"?" on":"")+'" onclick="setRkMode(\'sum\')">Sum</button><button class="tog-btn'+(rkMode==="avg"?" on":"")+'" onclick="setRkMode(\'avg\')">Avg</button></div>'+
     '</div>'+
-    (ps.length?ps.map((p,i)=>{const pA=personalAvgAllTime(p.n);const devPct=pA>0?((p.personalAvg-pA)/pA*100):0;const arrow=devPct>2?"↑":devPct<-2?"↓":"→";const ac=devPct>2?"#22c55e":devPct<-2?"#e63946":"#aaa";return'<div class="rr"><span class="rn">'+(i+1)+'</span><span class="rtrend" style="color:'+ac+'">'+arrow+'</span>'+imgEl(p.n,"rava",28)+'<span class="rnm pp-trigger" data-player="'+p.n.replace(/"/g,'&quot;')+'" title="'+p.n+'">'+p.n+'</span><div class="rbw"><div class="rb" style="width:'+(p.value/mx*100).toFixed(1)+'%;background:'+PAL[i%PAL.length]+'"></div></div><span class="rv">'+p.value.toFixed(1)+'</span><span class="rmins">'+Math.round(p.mins)+' min</span></div>';}).join(""):'<div class="empty"><div class="ei">📊</div>No data</div>');
+    (ps.length?ps.map((p,i)=>{const pA=personalAvgAllTime(p.n);const devPct=pA>0?((p.personalAvg-pA)/pA*100):0;const arrow=devPct>2?"↑":devPct<-2?"↓":"→";const ac=devPct>2?"#22c55e":devPct<-2?"#e63946":"#aaa";return'<div class="rr"><span class="rn">'+(i+1)+'</span><span class="rtrend" style="color:'+ac+'">'+arrow+'</span>'+imgEl(p.n,"rava",28)+'<span class="rnm pp-trigger" data-player="'+p.n.replace(/"/g,'&quot;')+'" title="'+p.n+'">'+p.n+'</span><div class="rbw"><div class="rb" style="width:'+(p.value/mx*100).toFixed(1)+'%;background:#6c6c74"></div></div><span class="rv">'+p.value.toFixed(1)+'</span><span class="rmins">'+Math.round(p.mins)+' min</span></div>';}).join(""):'<div class="empty"><div class="ei">📊</div>No data</div>');
 }
 
 /* PLAYER PROFILE */
