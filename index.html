@@ -176,6 +176,10 @@
     @media(max-width:1150px){.team-two{grid-template-columns:1fr;}}
     .team-two .rnm{width:132px;line-height:1.2;}
     .rx{display:inline-block;margin-left:6px;padding:0 4px;border-radius:3px;background:var(--y,#FFE500);color:#111;font-weight:700;font-size:9.5px;letter-spacing:0;line-height:14px;vertical-align:1px;cursor:help}
+    .stx-row{display:flex;gap:4px;margin-top:4px;flex-wrap:wrap}
+    .stx{display:inline-block;font-size:9.5px;font-weight:700;letter-spacing:.02em;padding:1px 5px;border-radius:3px;line-height:14px;white-space:nowrap;cursor:help}
+    .stx.ms{background:var(--surf2,#efeee8);color:var(--mid,#6c6c74);border:1px solid var(--border,rgba(0,0,0,.12))}
+    .stx.ex{background:var(--y,#FFE500);color:#111}
     .rnm small{display:block;font-weight:500;font-size:10px;color:var(--mid);letter-spacing:.08em;text-transform:uppercase;}
     .team-two .rb{background:#6c6c74;}
     .team-two .rr.lead .rb{background:var(--y);}
@@ -1589,7 +1593,8 @@ function buildModel(){
   TSG.forEach(g=>{g.games.sort((a,b)=>a.day-b.day);const r=g.games.find(e=>e.kind==="round");g.firstRound=r?r.day:null;});
 }
 /* Match-day label. Mon–Wed count up from the last game (MD+n) when there was one in the previous 4 days;
-   Thu–Sun count down to the next game (MD-n) when there is one in the next 6 days. No nearby game = no label. */
+   Thu–Sun count down to the next game (MD-n) when there is one in the next 6 days. No nearby game = no label.
+   Wednesday before a Saturday game counts down (MD-3); before a Sunday game it counts up from the last game (Gordon, 23 Nov 2026). */
 function mdFor(day,ts,isGame){
   if(day==null)return null;if(isGame)return"MD";
   const g=TSG.get(ts);if(!g)return null;
@@ -1597,6 +1602,7 @@ function mdFor(day,ts,isGame){
   for(const e of g.games){if(e.day<day)prev=e.day;else if(e.day===day)same=true;else{next=e.day;break;}}
   if(same)return"MD";
   const dow=(dayDate(day).getDay()+6)%7; /* 0 = Monday */
+  if(dow===2&&next!=null&&next-day<=3)return"MD-"+(next-day);
   if(dow<=2&&prev!=null&&day-prev<=4)return"MD+"+(day-prev);
   if(next!=null&&next-day<=6)return"MD-"+(next-day);
   return null;
@@ -2594,20 +2600,29 @@ function drawPlayer(data,scope,ctxTs){
   const ps=playerStats(data),ml=aggLabel();
   const mode=aggMode();
   document.getElementById("plTitle").textContent="Player Rankings — "+metShort(curMet)+" ("+ml+")";
-  document.getElementById("plTag").textContent=ps.length+" players · change vs "+(TV.vs==="own"?"own average":"position average");
+  /* % change only when the view is narrowed (date range, event filter or a clicked bar); a full-season view IS the
+     player's average, so no % is shown. The comparison is per session, against the player's (or position's) season
+     average built from the same mix of games and training they have in view. */
+  const df=parseInputDate(document.getElementById("dateFrom").value),dt=parseInputDate(document.getElementById("dateTo").value);
+  const dayOf=x=>x?dayNo(x):null,evAll=document.querySelectorAll(".evcb").length,evOn=gck("evcb").size;
+  const narrowed=!!scope||(df&&minDate&&dayOf(df)>dayOf(minDate))||(dt&&maxDate&&dayOf(dt)<dayOf(maxDate))||(evOn>0&&evOn<evAll);
+  document.getElementById("plTag").textContent=ps.length+" players · "+(narrowed?"change per session vs "+(TV.vs==="own"?"own season average":"position season average"):"full season: pick dates or click a bar to compare");
   const sa=document.getElementById("plSumAvg");if(sa)sa.style.display=RATE_METS[curMet]?"none":"";
   const mx=Math.max(...ps.map(p=>p.value),1);
   /* what kind of sessions are in view, and each player's position */
-  const tags=new Set(),posOf=new Map();data.forEach(d=>{const e=EVX.get(d["Event ID"]);tags.add(e&&e.isGame?"g":"t");const n=d["Player Full Name"];if(n&&!posOf.has(n))posOf.set(n,d["Position"]||"");});
-  const tg=[...tags];
+  const posOf=new Map(),mix=new Map();data.forEach(d=>{const e=EVX.get(d["Event ID"]);const n=d["Player Full Name"];if(!n)return;if(!posOf.has(n))posOf.set(n,d["Position"]||"");if(isNaN(nv(d[curMet])))return;let c=mix.get(n);if(!c)mix.set(n,c={g:0,t:0});c[e&&e.isGame?"g":"t"]++;});
   /* "+N" = sessions this player did with another group in the same period: left out of these team numbers */
   let lo=-Infinity,hi=Infinity;if(scope&&scope.list&&scope.list.length){const ds=scope.list.map(s=>s.day).filter(x=>x!=null);if(ds.length){lo=Math.min(...ds);hi=Math.max(...ds);}}
   const extraN=n=>{const m=_teamExtra.get(n);if(!m)return 0;let c=0;m.forEach(dy=>{if(dy>=lo&&dy<=hi)c++;});return c;};
   const xTag=n=>{const c=extraN(n);return c?'<span class="rx" title="'+c+' session'+(c>1?'s':'')+' with another group in this period, not counted in these team numbers">+'+c+'</span>':'';};
-  const baseFor=p=>{const v=tg.map(t=>TV.vs==="own"?baseOf("P",p.n+"|"+t,curMet):baseOf("POS",(ctxTs||"")+"|"+(posOf.get(p.n)||"")+"|"+t,curMet)).filter(x=>x!=null);return v.length?v.reduce((a,b)=>a+b,0)/v.length:null;};
+  /* show the % only when the view holds under 90% of the player's sessions of those kinds (otherwise it IS their average) */
+  const seasonN=(n,t)=>{const o=baseIdx().P.get(n+"|"+t);const a=o&&o[curMet];return a?a[1]:0;};
+  const partOf=p=>{const c=mix.get(p.n)||{g:0,t:0};let all=0;["g","t"].forEach(t=>{if(c[t])all+=seasonN(p.n,t);});return all>0&&(c.g+c.t)<0.9*all;};
+  const baseFor=p=>{const c=mix.get(p.n)||{g:0,t:0};let sw=0,sv=0;["g","t"].forEach(t=>{if(!c[t])return;const b=TV.vs==="own"?baseOf("P",p.n+"|"+t,curMet):baseOf("POS",(ctxTs||"")+"|"+(posOf.get(p.n)||"")+"|"+t,curMet);if(b==null)return;sw+=c[t];sv+=c[t]*b;});return sw?sv/sw:null;};
   document.getElementById("plRankRows").innerHTML=ps.length?ps.map((p,i)=>
-    '<div class="rr'+(i===0?" lead":"")+'"><span class="rn">'+(i+1)+'</span>'+imgEl(p.n,"rava",30)+'<span class="rnm pp-trigger" data-player="'+p.n.replace(/"/g,'&quot;')+'" title="'+p.n.replace(/"/g,'&quot;')+'">'+p.n+'<small>'+(posOf.get(p.n)||"")+xTag(p.n)+'</small></span><div class="rbw"><div class="rb" style="width:'+(p.value/mx*100).toFixed(1)+'%"></div></div><span class="rv">'+fmtNum(p.value)+'</span>'+devHtml(p.personalAvg,baseFor(p),"rdev")+'<span class="rmins">'+Math.round(p.mins)+' min</span></div>'
+    '<div class="rr'+(i===0?" lead":"")+'"><span class="rn">'+(i+1)+'</span>'+imgEl(p.n,"rava",30)+'<span class="rnm pp-trigger" data-player="'+p.n.replace(/"/g,'&quot;')+'" title="'+p.n.replace(/"/g,'&quot;')+'">'+p.n+'<small>'+(posOf.get(p.n)||"")+xTag(p.n)+'</small></span><div class="rbw"><div class="rb" style="width:'+(p.value/mx*100).toFixed(1)+'%"></div></div><span class="rv">'+fmtNum(p.value)+'</span>'+(narrowed&&partOf(p)?devHtml(p.personalAvg,baseFor(p),"rdev"):'<span class="rdev flat"></span>')+'<span class="rmins">'+Math.round(p.mins)+' min</span></div>'
   ).join(""):'<div class="empty">No data for the current filters</div>';
+  if(narrowed&&!ps.some(partOf))document.getElementById("plTag").textContent=ps.length+" players · this view covers their whole season: narrow the dates or click a bar to compare";
 }
 /* per-player table for the clicked bar (or the last game) */
 function drawScopeTable(list,title,sub,ctxTs){
@@ -2665,6 +2680,19 @@ function drawStatus(){
     else if(dy>=baseFrom&&dy<=baseTo){add(o.b);o.b.wk.add(Math.floor((baseTo-dy)/7));}
     if(e.isGame){const m=nv(d["Mins Played"]);if(!isNaN(m))o.gm.set(dy,(o.gm.get(dy)||0)+m);}
   });
+  /* sessions missed / extra in the last 7 days, to explain a load flag:
+     missed = training sessions of the player's own squad (3+ of its players there) that the player has no data for;
+     extra  = sessions (training or games) the player did with another group (a Team Session that is not their squad) */
+  const sqEv=new Map(),plEv=new Map(),plExtra=new Map();
+  allData.forEach(d=>{
+    const e=EVX.get(d["Event ID"]);if(!e||e.day==null||e.day<from7||e.day>end)return;
+    if(d["Split Name"]!==(e.isGame?"Full Game":"Full Session"))return;
+    const n=d["Player Full Name"],own=tsKey(d["Squad"]),ts=tsKey(d["Team Session"]);if(!n||!own||!ts)return;
+    let s=plEv.get(n);if(!s)plEv.set(n,s=new Set());s.add(d["Event ID"]);
+    if(tsParts(ts).includes(own)){if(!e.isGame){let m=sqEv.get(own);if(!m)sqEv.set(own,m=new Map());let ps=m.get(d["Event ID"]);if(!ps)m.set(d["Event ID"],ps=new Set());ps.add(n);}}
+    else{let x=plExtra.get(n);if(!x)plExtra.set(n,x=new Set());x.add(d["Event ID"]);}
+  });
+  const missedOf=o=>{const m=sqEv.get(tsKey(o.sq));if(!m)return 0;const mine=plEv.get(o.n)||new Set();let c=0;m.forEach((ps,id)=>{if(ps.size>=3&&!mine.has(id))c++;});return c;};
   const gameDays=new Map();
   const list=[...P.values()].filter(o=>o.w.n>0||o.b.wk.size>0).map(o=>{
     const pct=(w,b)=>b>0?Math.round((w-b/4)/(b/4)*100):null;
@@ -2674,6 +2702,7 @@ function drawStatus(){
     else{const hi=Math.max(o.dd,o.hd==null?o.dd:o.hd),lo=Math.min(o.dd,o.hd==null?o.dd:o.hd);o.fl=hi>ST_LOAD_PCT?"hi":lo<-ST_LOAD_PCT?"lw":"ok";o.mag=o.fl==="hi"?hi:o.fl==="lw"?-lo:Math.abs(hi);}
     const k=tsKey(o.sq);if(!gameDays.has(k)){const g=TSG.get(k);gameDays.set(k,g?[...new Set(g.games.filter(e=>e.day<=end).map(e=>e.day))].slice(-3):[]);}
     o.mins=gameDays.get(k).map(dy=>o.gm.has(dy)?Math.round(o.gm.get(dy)):null);
+    o.missed=missedOf(o);o.extra=(plExtra.get(o.n)||new Set()).size;
     return o;
   });
   const ORD={hi:0,lw:1,none:2,nb:3,ok:4};
@@ -2690,7 +2719,7 @@ function drawStatus(){
   tbl.innerHTML=head+"<tbody>"+list.map(o=>{
     const none=o.fl==="none";
     const sp=o.spPct==null?'<td><b>—</b></td>':'<td><b>'+o.spPct+'%</b><small class="'+(o.spPct<ST_SPEED_PCT?"warn":"flat")+'">'+(o.spPct<ST_SPEED_PCT?"▼ below "+ST_SPEED_PCT+"%":o.top7.toFixed(1)+" km/h")+'</small></td>';
-    return'<tr><td><span class="st-pl">'+imgEl(o.n,"rava",28)+'<span class="pp-trigger" data-player="'+o.n.replace(/"/g,'&quot;')+'">'+o.n+'<small class="st-pos">'+(o.pos||"")+'</small></span></span></td><td>'+PILL[o.fl]+'</td>'+
+    return'<tr><td><span class="st-pl">'+imgEl(o.n,"rava",28)+'<span class="pp-trigger" data-player="'+o.n.replace(/"/g,'&quot;')+'">'+o.n+'<small class="st-pos">'+(o.pos||"")+'</small></span></span></td><td>'+PILL[o.fl]+(o.missed||o.extra?'<span class="stx-row">'+(o.missed?'<span class="stx ms" title="Missed '+o.missed+' of the squad\'s training sessions in the last 7 days">missed '+o.missed+'</span>':'')+(o.extra?'<span class="stx ex" title="'+o.extra+' session'+(o.extra>1?'s':'')+' with another group in the last 7 days">+'+o.extra+' extra</span>':'')+'</span>':'')+'</td>'+
       (none?'<td class="st-na">—</td><td class="st-na">—</td><td class="st-na">—</td>':dev(o.w.d,1,o.dd,1)+dev(o.w.h,0,o.hd,1)+dev(o.w.s,0,o.sd,0))+sp+
       '<td class="mono">'+(o.mins.length?o.mins.map(m=>m==null?"–":m).join(" · "):"—")+'</td></tr>';
   }).join("")+"</tbody>";
@@ -2699,7 +2728,7 @@ function drawStatus(){
   tiles.innerHTML=tile("High load",n("hi"),"more than "+ST_LOAD_PCT+"% above their normal")+tile("Low load",n("lw"),"more than "+ST_LOAD_PCT+"% below their normal")+tile("On track",n("ok"),"within "+ST_LOAD_PCT+"% of their normal")+tile("No top-speed exposure",noSp,"trained, but under "+ST_SPEED_PCT+"% of season best");
   tag.textContent="last 7 days against each player's own 4-week normal · flagged players first";
   const extra=[];if(n("none"))extra.push(n("none")+" with no sessions in the last 7 days");if(n("nb"))extra.push(n("nb")+" without enough history for a baseline");
-  note.textContent="A player is flagged when distance or high-speed running for the last 7 days is more than "+ST_LOAD_PCT+"% above or below their own normal week (the average of the four weeks before). The centre line on each bar is that player's normal. Top speed is the highest speed reached in the last 7 days as a share of the player's season best. Game mins are the squad's last three game days."+(extra.length?" Also listed: "+extra.join("; ")+".":"")+(end!==today?" The squad has no sessions in the last 10 days, so the board counts back from its last session.":"");
+  note.textContent="A player is flagged when distance or high-speed running for the last 7 days is more than "+ST_LOAD_PCT+"% above or below their own normal week (the average of the four weeks before). The centre line on each bar is that player's normal. Top speed is the highest speed reached in the last 7 days as a share of the player's season best. Game mins are the squad's last three game days. \"missed n\" = squad training sessions in the last 7 days the player has no data for; \"+n extra\" = sessions with another group. Either can explain a high or low flag."+(extra.length?" Also listed: "+extra.join("; ")+".":"")+(end!==today?" The squad has no sessions in the last 10 days, so the board counts back from its last session.":"");
 }
 /* remember the squad between visits so the status board opens ready */
 function saveSquadPref(){try{localStorage.setItem("gps_sq",JSON.stringify([...gck("sqcb")]));}catch(e){}}
