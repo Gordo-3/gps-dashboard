@@ -5860,7 +5860,7 @@ function rlLoadPage(ctx,m,page){
 function rlAvg(rows,col){const v=rows.map(r=>+r[col]).filter(x=>!isNaN(x)&&isFinite(x)&&x!==0);return v.length?v.reduce((a,b)=>a+b,0)/v.length:null;}
 function rlSum(rows,col){const v=rows.map(r=>+r[col]).filter(x=>!isNaN(x)&&isFinite(x));return v.length?v.reduce((a,b)=>a+b,0):null;}
 function rlFmt(v,dp=1){return(v==null||isNaN(v))?'—':Number(v).toFixed(dp);}
-const rlMIN_MINS = squad => (['MYL 13','MYL 14','MYL 15'].includes(squad) ? 35 : 58);
+const rlMIN_MINS = squad => (['MYL 13','MYL 14','MYL 15'].includes(squad) ? 35 : squad==='MYL 16' ? 50 : 45);
 
 /* personal season average for a metric (Full Game), for the trend arrows */
 function rlPersonalGameAvg(name,col){
