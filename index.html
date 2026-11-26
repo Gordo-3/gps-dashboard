@@ -1422,18 +1422,21 @@ if(window.Chart){Chart.defaults.font.family="'Archivo','DM Sans',sans-serif";Cha
    2026: the values-only ARCHIVE copy (faster than the old formula master 1aMYMNin…, which the 2026 backup still uses).
    combinedNames: the season names joint training "MYL 18/MSnr 20". 2026 did not (18s training with the 20s were logged
    under "MSnr 20"), so the Team tab's own-squad rule is switched off for 2026 or it would drop their normal training.
-   Add combinedNames:true to every new season. */
+   Add combinedNames:true to every new season.
+   tab: the sheet tab the dashboard reads (by name). Google quietly serves the FIRST tab when a name is not found, so this
+   must match exactly; the 2027 sheet's first tab is an import tab, the combined data is on "Master". */
 const SEASONS=[
-  {key:"2027",label:"2027",report:"Season 2026/27",id:"1eLfp_-UijsiMJtgmbBKwEB_S90CJvXyx1gGazQhHTPM",jersey:"Jersey_Number_2026_-_Sheet1.csv",combinedNames:true},
-  {key:"2026",label:"2026",report:"Season 2025/26",id:"1zw_wE295CHPH14kFmCN4NBa3dvboIw5V7spq3VCD-6U",jersey:"Jersey_Number_2026_-_Sheet1.csv"}
+  {key:"2027",label:"2027",report:"Season 2026/27",id:"1eLfp_-UijsiMJtgmbBKwEB_S90CJvXyx1gGazQhHTPM",tab:"Master",jersey:"Jersey_Number_2026_-_Sheet1.csv",combinedNames:true},
+  {key:"2026",label:"2026",report:"Season 2025/26",id:"1zw_wE295CHPH14kFmCN4NBa3dvboIw5V7spq3VCD-6U",tab:"MASTER ARCHIVED",jersey:"Jersey_Number_2026_-_Sheet1.csv"}
 ];
+function sheetApi(s){return "https://docs.google.com/spreadsheets/d/"+s.id+"/gviz/tq?tqx=out:json&sheet="+encodeURIComponent(s.tab||"GPS");}
 function seasonByKey(k){return SEASONS.find(s=>s.key===k)||SEASONS[0];}
 let SEASON=seasonByKey((()=>{try{return localStorage.getItem("gps_season");}catch(e){return null;}})());
 let SHEETS,APIS;
 function applySeason(k){
   SEASON=seasonByKey(k);try{localStorage.setItem("gps_season",SEASON.key);}catch(e){}
-  SHEETS=[{id:SEASON.id,label:"Master"}];
-  APIS=SHEETS.map(s=>`https://docs.google.com/spreadsheets/d/${s.id}/gviz/tq?tqx=out:json&sheet=GPS`);
+  SHEETS=[{id:SEASON.id,tab:SEASON.tab,label:"Master"}];
+  APIS=SHEETS.map(sheetApi);
   document.querySelectorAll(".season-sel").forEach(s=>{if(!s.options.length)s.innerHTML=seasonOptions();s.value=SEASON.key;});
   const hs=document.getElementById("hdrSeason");if(hs)hs.textContent=SEASON.label+" SEASON";
 }
@@ -1533,7 +1536,7 @@ Promise.all(APIS.map((url,i)=>fetchWithRetry(url).then(t=>{updateLoBar();return 
   const stamp=()=>ss("live",allData.length+" records · "+new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}));
   const sig=texts.map(_sigOf).join("|");
   if(_firstLoadDone&&sig===_dataSig){_loadBusy=false;endLoBar();stamp();return;} /* sheet unchanged: leave the screen alone */
-  const results=texts.map((t,i)=>{const js=t.replace(/^\/\*[\s\S]*?\*\/\s*/,"").replace(/^google\.visualization\.Query\.setResponse\(/,"").replace(/\);\s*$/,"");return pgviz(JSON.parse(js)).map(r=>({...r,"Team Session":normTs(r["Team Session"]),_date:parseDate(r["Date"]),_source:SHEETS[i].label}));});
+  const results=texts.map((t,i)=>{const js=t.replace(/^\/\*[\s\S]*?\*\/\s*/,"").replace(/^google\.visualization\.Query\.setResponse\(/,"").replace(/\);\s*$/,"");return pgviz(JSON.parse(js)).filter(r=>!/^#/.test(String(r["Squad"]||""))&&!/^#/.test(String(r["Player Full Name"]||""))).map(r=>({...r,"Team Session":normTs(r["Team Session"]),_date:parseDate(r["Date"]),_source:SHEETS[i].label}));});
   _dataSig=sig;
   const isRefresh=_firstLoadDone;
   const snap=isRefresh?_snapChecks():null;
@@ -3846,7 +3849,7 @@ async function loadPrevSeason(k,force){
   const keep=k!==SEASONS[0].key;
   if(!force&&keep){try{const c=JSON.parse(localStorage.getItem(prevStoreKey(k))||"null");
     if(c&&Array.isArray(c.rows)&&Array.isArray(c.cols)){const rows=c.rows.map(r=>{const o={};c.cols.forEach((col,i)=>{o[col]=r[i];});o._date=parseDate(o["Date"]);o._season=k;return o;});rows._saved=c.saved;rows._from="device";PREV[k]=rows;return rows;}}catch(e){}}
-  const s=seasonByKey(k),base="https://docs.google.com/spreadsheets/d/"+s.id+"/gviz/tq?tqx=out:json&sheet=GPS";
+  const s=seasonByKey(k),base=sheetApi(s);
   const get=async q=>{const t=await (await fetch(base+(q?"&tq="+encodeURIComponent(q):"")+"&t="+Date.now())).text();
     return JSON.parse(t.replace(/^\/\*[\s\S]*?\*\/\s*/,"").replace(/^[^(]*\(/,"").replace(/\);\s*$/,""));};
   let j;
