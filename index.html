@@ -176,6 +176,13 @@
     @media(max-width:1150px){.team-two{grid-template-columns:1fr;}}
     .team-two .rnm{width:132px;line-height:1.2;}
     .rx{display:inline-block;margin-left:6px;padding:0 4px;border-radius:3px;background:var(--y,#FFE500);color:#111;font-weight:700;font-size:9.5px;letter-spacing:0;line-height:14px;vertical-align:1px;cursor:help}
+    .sc-seasons{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+    .sc-season-btn{font-family:var(--font-b,inherit);font-size:11px;font-weight:700;letter-spacing:.04em;padding:6px 11px;border-radius:999px;border:1px dashed var(--border,rgba(0,0,0,.2));background:transparent;color:var(--mid,#6c6c74);cursor:pointer}
+    .sc-season-btn.on{border-style:solid;border-color:#111;background:#111;color:#FFE500}
+    .sc-season-st{font-size:10.5px;color:var(--mid,#6c6c74)}
+    .sc-season-st a{color:inherit;text-decoration:underline;cursor:pointer}
+    .sc-nameflag{margin:0 0 .8rem;padding:.6rem .85rem;border-radius:8px;background:#fff8cc;border:1px solid #e9d66b;font-size:12px;line-height:1.5;color:#3a3a42}
+    .sc-nameflag b{font-weight:700}
     .stx-row{display:flex;gap:4px;margin-top:4px;flex-wrap:wrap}
     .stx{display:inline-block;font-size:9.5px;font-weight:700;letter-spacing:.02em;padding:1px 5px;border-radius:3px;line-height:14px;white-space:nowrap;cursor:help}
     .stx.ms{background:var(--surf2,#efeee8);color:var(--mid,#6c6c74);border:1px solid var(--border,rgba(0,0,0,.12))}
@@ -1205,6 +1212,7 @@
         <button class="sc-layer-btn on-club" id="scBtnClub" onclick="scToggleLayer('club')">Club Wide</button>
         <button class="sc-layer-btn" id="scBtnExclGK" onclick="scToggleExclGK()" style="background:#555;border-color:#555;color:#fff">Excl. GK</button>
       </div>
+      <div class="sc-seasons" id="scSeasons"></div>
       <div class="sc-view-btns">
         <button class="sc-view-btn on" id="scBtnPV" onclick="scSetView('player')">Player View</button>
         <button class="sc-view-btn" id="scBtnCV" onclick="scSetView('coach')">Coach View</button>
@@ -1237,6 +1245,10 @@
               <option value="">All squads</option>
             </select>
           </div>
+          <div class="sc-filter-row sc-season-row" style="display:none">
+            <div class="sc-filter-lbl">Player 1 Season</div>
+            <select class="sc-sel" id="scP1Season" onchange="scOnSeasonSel('p1')"></select>
+          </div>
           <!-- Player 2 -->
           <div class="sc-filter-row">
             <div class="sc-filter-lbl">Player 2 <span style="color:#555">●</span> <span style="font-weight:400;color:var(--mid)">(optional)</span></div>
@@ -1256,6 +1268,10 @@
             <select class="sc-sel" id="scP2Sq" onchange="scOnP2Sq()">
               <option value="">All squads</option>
             </select>
+          </div>
+          <div class="sc-filter-row sc-season-row" style="display:none">
+            <div class="sc-filter-lbl">Player 2 Season</div>
+            <select class="sc-sel" id="scP2Season" onchange="scOnSeasonSel('p2')"></select>
           </div>
           <!-- Position filter for player search -->
           <div class="sc-filter-row">
@@ -1299,6 +1315,7 @@
       <div class="sc-filter-lbl" style="margin-bottom:10px">MINS PLAYED: <span id="scMinsLbl">0 – 120 min</span></div>
       <div id="scMinsSlider" style="margin:0 8px"></div>
     </div>
+    <div class="sc-nameflag" id="scNameFlag" style="display:none"></div>
     <!-- Chart -->
     <div class="sc-wrap"><canvas id="scCanvas"></canvas></div>
     <!-- Legend -->
@@ -3317,12 +3334,14 @@ let scState={
   p1Sq:'', p2Sq:'',
   psPos:new Set(), psSq:'',
   fdPos:new Set(), fdSq:new Set(), fdEvs:new Set(),
-  mMin:0, mMax:120
+  mMin:0, mMax:120,
+  incl:new Set(), p1Season:'', p2Season:''   /* other seasons switched on; per-player season ('' = this season, 'all' = every loaded season) */
 };
 let scChart=null;
 
 function initScatter(){
   if(!allData||!allData.length)return;
+  scRenderSeasons();
   scBuildPosLists();
   scBuildSqSelects();
   scBuildFdEvs();
@@ -3336,14 +3355,19 @@ function initScatter(){
 function scBaseData(){
   const fromDate=document.getElementById("dateFrom").value?parseInputDate(document.getElementById("dateFrom").value):null;
   const toDate=document.getElementById("dateTo").value?parseInputDate(document.getElementById("dateTo").value):null;
-  return allData.filter(d=>{
+  const cur=allData.filter(d=>{
     if((d["Tags"]||"").toLowerCase().trim()!=="game")return false;
     if(d["Split Name"]!=="Full Game")return false;
     if(fromDate&&d._date&&d._date<fromDate)return false;
     if(toDate&&d._date&&d._date>toDate)return false;
     return true;
   });
+  if(!scState.incl.size)return cur;
+  /* other seasons: whole season (the date range belongs to the season in view) */
+  let out=cur;scState.incl.forEach(k=>{if(PREV[k])out=out.concat(PREV[k]);});return out;
 }
+const scSeasonOf=d=>d._season||SEASON.key;
+const scSeasonOk=(d,sel)=>!sel?scSeasonOf(d)===SEASON.key:sel==='all'?true:scSeasonOf(d)===sel;
 
 // Get Club Wide dots data
 function scClubData(){
@@ -3363,12 +3387,13 @@ function scClubData(){
 }
 
 // Get Player dots data
-function scPlayerData(playerName,playerSq){
+function scPlayerData(playerName,playerSq,season){
   if(!playerName)return[];
   const base=scBaseData();
   const psPos=scState.psPos;
   return base.filter(d=>{
     if(d["Player Full Name"]!==playerName)return false;
+    if(!scSeasonOk(d,season))return false;
     const mins=+d["Mins Played"];
     if(isNaN(mins)||mins<scState.mMin||mins>scState.mMax)return false;
     if(psPos.size>0&&!psPos.has(d["Position"]))return false;
@@ -3419,11 +3444,11 @@ function drawScatter(){
   const yLabel=scState.useRate&&g.yR?g.yL+"/min":g.yL;
 
   const clubRaw=scClubData();
-  const p1Raw=scPlayerData(scState.p1,scState.p1Sq);
-  const p2Raw=scPlayerData(scState.p2,scState.p2Sq);
+  const p1Raw=scPlayerData(scState.p1,scState.p1Sq,scState.p1Season);
+  const p2Raw=scPlayerData(scState.p2,scState.p2Sq,scState.p2Season);
 
   // Build valid points
-  const toPoints=(rows)=>rows.map(d=>{const v=scXY(d);return isNaN(v.x)||isNaN(v.y)?null:{x:v.x,y:v.y,mins:+d["Mins Played"]||0,pos:d["Position"]||"",evId:d["Event ID"]||"",name:d["Player Full Name"]||""};}).filter(Boolean);
+  const toPoints=(rows)=>rows.map(d=>{const v=scXY(d);return isNaN(v.x)||isNaN(v.y)?null:{x:v.x,y:v.y,mins:+d["Mins Played"]||0,pos:d["Position"]||"",evId:d["Event ID"]||"",name:d["Player Full Name"]||"",season:scSeasonOf(d),old:scSeasonOf(d)!==SEASON.key};}).filter(Boolean);
 
   const clubPts=toPoints(clubRaw);
   const p1Pts=toPoints(p1Raw);
@@ -3453,9 +3478,9 @@ function drawScatter(){
       data:clubPts.map(p=>({x:p.x,y:p.y,_pt:p})),
       pointRadius:clubPts.map(p=>scRadius(p.mins,maxMins)),
       pointHoverRadius:clubPts.map(p=>scRadius(p.mins,maxMins)+2),
-      pointBackgroundColor:clubPts.map(p=>scPosColor(p.pos).fill),
+      pointBackgroundColor:clubPts.map(p=>p.old?'rgba(255,255,255,0.6)':scPosColor(p.pos).fill),
       pointBorderColor:clubPts.map(p=>scPosColor(p.pos).border),
-      pointBorderWidth:1,
+      pointBorderWidth:clubPts.map(p=>p.old?1.6:1),
       type:'scatter',
       order:3
     });
@@ -3471,6 +3496,7 @@ function drawScatter(){
       pointBackgroundColor:'#1a1a1a',
       pointBorderColor:'#fff',
       pointBorderWidth:2,
+      pointStyle:p2Pts.map(p=>p.old?'rectRot':'circle'),
       type:'scatter',
       order:2
     });
@@ -3486,6 +3512,7 @@ function drawScatter(){
       pointBackgroundColor:'#FFE500',
       pointBorderColor:'#111',
       pointBorderWidth:2,
+      pointStyle:p1Pts.map(p=>p.old?'rectRot':'circle'),
       type:'scatter',
       order:1
     });
@@ -3529,7 +3556,7 @@ function drawScatter(){
       const isP2=ctx.dataset.label==='Player 2';
       const xv=pt.x.toFixed(2),yv=pt.y.toFixed(2);
       const metricsLine=xLabel+': '+xv+' | '+yLabel+': '+yv;
-      const infoLine='Event: '+pt.evId+' | Pos: '+pt.pos+' | Mins: '+Math.round(pt.mins);
+      const infoLine=(scState.incl.size?'Season '+pt.season+' | ':'')+'Event: '+pt.evId+' | Pos: '+pt.pos+' | Mins: '+Math.round(pt.mins);
       if(isP1||isP2){
         return[scInitials(pt.name)+' — '+infoLine,metricsLine];
       }
@@ -3575,8 +3602,10 @@ function scBuildLegend(clubPts){
     const c=scPosColor(pos);
     html+='<span class="sc-leg-item"><span class="sc-leg-dot" style="background:'+c.fill+';border:1.5px solid '+c.border+'"></span>'+pos+'</span>';
   });
-  if(scState.layerP1&&scState.p1)html+='<span class="sc-leg-item"><span class="sc-leg-dot" style="background:#FFE500;border:1.5px solid #c8b400"></span>'+scInitials(scState.p1)+'</span>';
-  if(scState.layerP2&&scState.p2)html+='<span class="sc-leg-item"><span class="sc-leg-dot" style="background:#1a1a1a;border:1.5px solid #555"></span>'+scInitials(scState.p2)+'</span>';
+  const sLbl=v=>scState.incl.size?' ('+(v==='all'?'all seasons':v||SEASON.key)+')':'';
+  if(scState.layerP1&&scState.p1)html+='<span class="sc-leg-item"><span class="sc-leg-dot" style="background:#FFE500;border:1.5px solid #c8b400"></span>'+scInitials(scState.p1)+sLbl(scState.p1Season)+'</span>';
+  if(scState.layerP2&&scState.p2)html+='<span class="sc-leg-item"><span class="sc-leg-dot" style="background:#1a1a1a;border:1.5px solid #555"></span>'+scInitials(scState.p2)+sLbl(scState.p2Season)+'</span>';
+  if(scState.incl.size)html+='<span class="sc-leg-item" style="margin-left:8px"><span class="sc-leg-dot" style="background:#fff;border:1.5px solid #888"></span>hollow = '+[...scState.incl].join(', ')+' games · ◆ = player in '+[...scState.incl].join(', ')+'</span>';
   if(scState.layerClub&&clubPts.length){html+='<span class="sc-leg-item" style="margin-left:8px"><span style="width:18px;height:2px;background:rgba(180,60,60,0.5);display:inline-block;vertical-align:middle;border-top:2px dashed rgba(180,60,60,0.5)"></span> Trend</span>';}
   legEl.innerHTML=html;
 }
@@ -3634,10 +3663,11 @@ function scTogglePlayerDrop(side){
   if(!isOpen){panel.classList.add('open');document.getElementById(srchId).focus();}
 }
 
-function scGetPlayerPool(sq){
+function scGetPlayerPool(sq,season){
   const base=scBaseData();
   const psPos=scState.psPos;
   return[...new Set(base.filter(d=>{
+    if(!scSeasonOk(d,season))return false;
     if(psPos.size>0&&!psPos.has(d["Position"]))return false;
     if(sq&&d["Squad"]!==sq)return false;
     const mins=+d["Mins Played"];
@@ -3650,7 +3680,7 @@ function scRenderPlayers(side,q){
   const listId=side==='p1'?'scP1List':'scP2List';
   const cur=side==='p1'?scState.p1:scState.p2;
   const sq=side==='p1'?scState.p1Sq:scState.p2Sq;
-  const players=scGetPlayerPool(sq).filter(p=>!q||p.toLowerCase().includes(q.toLowerCase()));
+  const players=scGetPlayerPool(sq,side==='p1'?scState.p1Season:scState.p2Season).filter(p=>!q||p.toLowerCase().includes(q.toLowerCase()));
   document.getElementById(listId).innerHTML=players.map(p=>
     '<div class="sc-player-item'+(p===cur?' sel':'')+'" onmousedown="scPickPlayer(\''+side+'\',\''+p.replace(/'/g,"\\'")+'\')">'
     +imgEl(p,'rava',22)+'<span>'+p+'</span></div>'
@@ -3690,25 +3720,30 @@ function scClearPlayer(side){
 }
 
 // Position lists
+/* checked boxes as a filter set: all ticked = no filter (empty Set); none ticked = match nothing */
+const SC_NONE='\u0000none';
+function scSel(cls){const n=document.querySelectorAll('.'+cls).length,on=gck(cls);return on.size===n?new Set():on.size?on:new Set([SC_NONE]);}
 function scBuildPosLists(){
-  const positions=[...new Set(allData.filter(d=>(d["Tags"]||"").toLowerCase().trim()==="game"&&d["Split Name"]==="Full Game").map(d=>d["Position"]).filter(Boolean))].sort();
+  /* from every season in view (this season may have no games yet); keeps what was unticked */
+  const positions=[...new Set(scBaseData().map(d=>d["Position"]).filter(Boolean))].sort();
+  const keep=(set,p)=>!set.size||set.has(p);
   document.getElementById('scPsPosList').innerHTML=positions.map(p=>
-    '<label class="sc-ck-item"><input type="checkbox" class="scPsCb" value="'+p+'" checked onchange="scOnPsPos()"><span>'+p+'</span></label>'
+    '<label class="sc-ck-item"><input type="checkbox" class="scPsCb" value="'+p+'" '+(keep(scState.psPos,p)?'checked':'')+' onchange="scOnPsPos()"><span>'+p+'</span></label>'
   ).join('');
   document.getElementById('scFdPosList').innerHTML=positions.map(p=>
-    '<label class="sc-ck-item"><input type="checkbox" class="scFdCb" value="'+p+'" checked onchange="scOnFdPos()"><span>'+p+'</span></label>'
+    '<label class="sc-ck-item"><input type="checkbox" class="scFdCb" value="'+p+'" '+(keep(scState.fdPos,p)?'checked':'')+' onchange="scOnFdPos()"><span>'+p+'</span></label>'
   ).join('');
-  scState.psPos=new Set();
-  scState.fdPos=new Set();
+  scState.psPos=scSel('scPsCb');
+  scState.fdPos=scSel('scFdCb');
 }
 
 function scOnPsPos(){
-  scState.psPos=gck('scPsCb');
+  scState.psPos=scSel('scPsCb');
   scRenderPlayers('p1','');scRenderPlayers('p2','');
   drawScatter();
 }
 function scOnFdPos(){
-  scState.fdPos=gck('scFdCb');
+  scState.fdPos=scSel('scFdCb');
   drawScatter();
 }
 
@@ -3725,17 +3760,18 @@ function scToggleExclGK(){
 
 // Squad selects
 function scBuildSqSelects(){
-  const squads=[...new Set(allData.filter(d=>(d["Tags"]||"").toLowerCase().trim()==="game"&&d["Split Name"]==="Full Game").map(d=>d["Squad"]).filter(Boolean))].sort();
+  const squads=[...new Set(scBaseData().map(d=>d["Squad"]).filter(Boolean))].sort();
   const opts='<option value="">All squads</option>'+squads.map(s=>'<option value="'+s+'">'+s+'</option>').join('');
   ['scP1Sq','scP2Sq'].forEach(id=>{
     const sel=document.getElementById(id);if(!sel)return;sel.innerHTML=opts;
+    const k=id==='scP1Sq'?'p1Sq':'p2Sq';if(scState[k]&&squads.includes(scState[k]))sel.value=scState[k];else scState[k]='';
   });
   const fdList=document.getElementById('scFdSqList');
   if(fdList){fdList.innerHTML=squads.map(s=>'<label class="sc-ck-item"><input type="checkbox" class="scFdSqCb" value="'+s+'" checked onchange="scOnFdSq()"><span>'+s+'</span></label>').join('');}
   scState.fdSq=new Set();
 }
 function scFdSqAll(v){document.querySelectorAll('.scFdSqCb').forEach(c=>{c.checked=v;});scOnFdSq();}
-function scOnFdSq(){scState.fdSq=gck('scFdSqCb');scBuildFdEvs();drawScatter();}
+function scOnFdSq(){scState.fdSq=scSel('scFdSqCb');scBuildFdEvs();drawScatter();}
 
 // Event ID list for Filter Displayed Games
 function scBuildFdEvs(){
@@ -3743,14 +3779,7 @@ function scBuildFdEvs(){
   const fromDate=document.getElementById("dateFrom").value?parseInputDate(document.getElementById("dateFrom").value):null;
   const toDate=document.getElementById("dateTo").value?parseInputDate(document.getElementById("dateTo").value):null;
   const seen=new Map();
-  allData.filter(d=>{
-    if((d["Tags"]||"").toLowerCase().trim()!=="game")return false;
-    if(d["Split Name"]!=="Full Game")return false;
-    if(fdSq.size>0&&!fdSq.has(d["Squad"]))return false;
-    if(fromDate&&d._date&&d._date<fromDate)return false;
-    if(toDate&&d._date&&d._date>toDate)return false;
-    return true;
-  }).forEach(d=>{
+  scBaseData().filter(d=>!(fdSq.size>0&&!fdSq.has(d["Squad"]))).forEach(d=>{
     const id=d["Event ID"];if(!id||seen.has(id))return;
     const tag=(d["Tags"]||"").toLowerCase().trim();
     seen.set(id,{id,tag,date:d._date,dateStr:fmtDate(d._date)});
@@ -3773,19 +3802,12 @@ function scFilterFdEvs(q){
   const fromDate=document.getElementById("dateFrom").value?parseInputDate(document.getElementById("dateFrom").value):null;
   const toDate=document.getElementById("dateTo").value?parseInputDate(document.getElementById("dateTo").value):null;
   const seen=new Map();
-  allData.filter(d=>{
-    if((d["Tags"]||"").toLowerCase().trim()!=="game")return false;
-    if(d["Split Name"]!=="Full Game")return false;
-    if(fdSq.size>0&&!fdSq.has(d["Squad"]))return false;
-    if(fromDate&&d._date&&d._date<fromDate)return false;
-    if(toDate&&d._date&&d._date>toDate)return false;
-    return true;
-  }).forEach(d=>{const id=d["Event ID"];if(!id||seen.has(id))return;seen.set(id,{id,tag:(d["Tags"]||"").toLowerCase().trim(),date:d._date,dateStr:fmtDate(d._date)});});
+  scBaseData().filter(d=>!(fdSq.size>0&&!fdSq.has(d["Squad"]))).forEach(d=>{const id=d["Event ID"];if(!id||seen.has(id))return;seen.set(id,{id,tag:(d["Tags"]||"").toLowerCase().trim(),date:d._date,dateStr:fmtDate(d._date)});});
   const evs=[...seen.values()].sort((a,b)=>(a.date||0)-(b.date||0)).filter(ev=>!q||ev.id.toLowerCase().includes(q.toLowerCase())||ev.dateStr.includes(q));
   scRenderFdEvs(evs,gck('scFdEvCb'));
 }
 
-function scOnFdEvs(){scState.fdEvs=gck('scFdEvCb');drawScatter();}
+function scOnFdEvs(){scState.fdEvs=scSel('scFdEvCb');drawScatter();}
 
 // PC mins slider — noUiSlider
 function initScMinsSlider(){
@@ -3805,6 +3827,83 @@ function scOnMins(){} // kept for any legacy references
 // Close dropdowns on outside click — wired into existing document click listener
 function scHandleOutsideClick(e){
   if(!e.target.closest('.sc-player-outer'))document.querySelectorAll('.sc-player-panel').forEach(p=>p.classList.remove('open'));
+}
+/* ===================== OTHER SEASONS (Player Comparison only) =====================
+   Switched on with the "+ 2026" button in this tab. Loads that season's GAMES only (Full Game rows and the
+   columns the comparison needs; Google filters before sending), keeps them apart from allData so no other tab or
+   PDF can mix seasons, and saves a finished season in this browser so the next time is instant ("reload" fetches it again).
+   The newest season is never saved (it is still changing). */
+const PREV={};
+const PREV_COLS=["Squad","Event ID","Position","Team Session","Player Full Name","Mins Played","Date","Split Name","Tags","Distance (km)","Work Rate (m/min)","HSR (m)","Sprint Distance (m)","Hard Accelerations (#)","Hard Decelerations (#)","HSR/Min","Sprint Distance/Min","Hard Accelerations (#) Per.Min","Hard Decelerations (#) Per.Min","Top Speed (km/h)"];
+const PREV_VER=1,_prevBusy={};
+const prevStoreKey=k=>"gps_prev_"+k+"_v"+PREV_VER;
+function prevFromRaw(raw,k){
+  return raw.filter(r=>r["Split Name"]==="Full Game"&&(r["Tags"]||"").toLowerCase().trim()==="game").map(r=>{
+    const o={};PREV_COLS.forEach(c=>{o[c]=r[c]==null?"":r[c];});o["Team Session"]=normTs(o["Team Session"]);o._date=parseDate(o["Date"]);o._season=k;return o;});
+}
+async function loadPrevSeason(k,force){
+  if(PREV[k]&&!force)return PREV[k];
+  const keep=k!==SEASONS[0].key;
+  if(!force&&keep){try{const c=JSON.parse(localStorage.getItem(prevStoreKey(k))||"null");
+    if(c&&Array.isArray(c.rows)&&Array.isArray(c.cols)){const rows=c.rows.map(r=>{const o={};c.cols.forEach((col,i)=>{o[col]=r[i];});o._date=parseDate(o["Date"]);o._season=k;return o;});rows._saved=c.saved;rows._from="device";PREV[k]=rows;return rows;}}catch(e){}}
+  const s=seasonByKey(k),base="https://docs.google.com/spreadsheets/d/"+s.id+"/gviz/tq?tqx=out:json&sheet=GPS";
+  const get=async q=>{const t=await (await fetch(base+(q?"&tq="+encodeURIComponent(q):"")+"&t="+Date.now())).text();
+    return JSON.parse(t.replace(/^\/\*[\s\S]*?\*\/\s*/,"").replace(/^[^(]*\(/,"").replace(/\);\s*$/,""));};
+  let j;
+  try{const head=await get("select * limit 0");const ids={};head.table.cols.forEach(c=>{ids[(c.label||"").trim()]=c.id;});
+    if(!ids["Split Name"])throw new Error("no split column");
+    j=await get("select "+PREV_COLS.filter(c=>ids[c]).map(c=>ids[c]).join(",")+" where "+ids["Split Name"]+" = 'Full Game'");}
+  catch(e){j=await get("");}   /* fall back to the whole sheet, filtered here */
+  const rows=prevFromRaw(pgviz(j),k);rows._saved=Date.now();rows._from="sheet";PREV[k]=rows;
+  if(keep){try{localStorage.setItem(prevStoreKey(k),JSON.stringify({saved:rows._saved,cols:PREV_COLS,rows:rows.map(r=>PREV_COLS.map(c=>r[c]))}));}catch(e){}}
+  return rows;
+}
+function scRenderSeasons(){
+  const box=document.getElementById("scSeasons");if(!box)return;
+  const others=SEASONS.filter(s=>s.key!==SEASON.key);
+  box.innerHTML=others.map(s=>{const on=scState.incl.has(s.key),busy=_prevBusy[s.key],d=PREV[s.key];
+    let st="";if(busy)st="loading…";else if(on&&d)st=d.length.toLocaleString()+" player games · "+(d._from==="device"?"saved on this device":"loaded")+(s.key!==SEASONS[0].key?' · <a onclick="scReloadSeason(\''+s.key+'\')">reload</a>':"");
+    return '<button class="sc-season-btn'+(on?" on":"")+'" onclick="scToggleSeason(\''+s.key+'\')" title="Add '+s.label+' games to this comparison">'+(on?"✓ ":"+ ")+s.label+'</button>'+(st?'<span class="sc-season-st">'+st+'</span>':"");}).join("");
+  const show=scState.incl.size>0;
+  document.querySelectorAll(".sc-season-row").forEach(r=>{r.style.display=show?"":"none";});
+  const opts='<option value="">'+SEASON.label+' (this season)</option>'+[...scState.incl].map(k=>'<option value="'+k+'">'+seasonByKey(k).label+'</option>').join("")+'<option value="all">All seasons shown</option>';
+  ["p1","p2"].forEach(side=>{const sel=document.getElementById(side==="p1"?"scP1Season":"scP2Season");if(!sel)return;const cur=scState[side+"Season"];sel.innerHTML=opts;
+    if(cur&&cur!=="all"&&!scState.incl.has(cur))scState[side+"Season"]="";sel.value=scState[side+"Season"];});
+}
+async function scToggleSeason(k){
+  if(scState.incl.has(k)){scState.incl.delete(k);scAfterSeasonChange();return;}
+  _prevBusy[k]=true;scRenderSeasons();
+  try{await loadPrevSeason(k);scState.incl.add(k);}
+  catch(e){alert("Could not load the "+seasonByKey(k).label+" season. Check the connection and try again.");}
+  _prevBusy[k]=false;scAfterSeasonChange();
+}
+async function scReloadSeason(k){_prevBusy[k]=true;scRenderSeasons();try{await loadPrevSeason(k,true);}catch(e){alert("Could not reload "+seasonByKey(k).label+".");}_prevBusy[k]=false;scAfterSeasonChange();}
+function scOnSeasonSel(side){scState[side+"Season"]=document.getElementById(side==="p1"?"scP1Season":"scP2Season").value;scRenderPlayers(side,"");drawScatter();}
+function scAfterSeasonChange(){scRenderSeasons();scBuildPosLists();scBuildSqSelects();scBuildFdEvs();scRenderPlayers("p1","");scRenderPlayers("p2","");scNameCheck();drawScatter();}
+
+/* Name check: the same player must be spelled the same in every season, or they show up as two people.
+   Flags pairs of names that are nearly the same (one or two letters apart, or same surname with a close first name). */
+function scLev(a,b){if(a===b)return 0;const m=a.length,n=b.length;if(Math.abs(m-n)>3)return 9;let p=Array.from({length:n+1},(_,j)=>j);
+  for(let i=1;i<=m;i++){const c=[i];for(let j=1;j<=n;j++)c[j]=Math.min(p[j]+1,c[j-1]+1,p[j-1]+(a[i-1]===b[j-1]?0:1));p=c;}return p[n];}
+function nameNearPairs(listA,listB){
+  const norm=x=>String(x).toLowerCase().replace(/[^a-z ]/g,"").replace(/\s+/g," ").trim(),out=[];
+  const B=listB.map(n=>({n,k:norm(n)}));
+  listA.forEach(a=>{const ka=norm(a);B.forEach(b=>{if(a===b.n||ka===b.k&&a===b.n)return;
+    const d=scLev(ka,b.k);const pa=ka.split(" "),pb=b.k.split(" ");
+    const sameLast=pa.length>1&&pb.length>1&&pa[pa.length-1]===pb[pb.length-1]&&scLev(pa[0],pb[0])<=2;
+    if(d<=2||sameLast)out.push([a,b.n]);});});
+  return out;
+}
+function scNameCheck(){
+  const box=document.getElementById("scNameFlag");if(!box)return;
+  if(!scState.incl.size){box.style.display="none";return;}
+  const cur=[...new Set(allData.map(d=>d["Player Full Name"]).filter(Boolean))];
+  const items=[];
+  scState.incl.forEach(k=>{const old=[...new Set((PREV[k]||[]).map(d=>d["Player Full Name"]).filter(Boolean))];const oldSet=new Set(old),curSet=new Set(cur);
+    nameNearPairs(cur.filter(n=>!oldSet.has(n)),old.filter(n=>!curSet.has(n))).forEach(([a,b])=>items.push('<b>'+b+'</b> ('+k+') ≈ <b>'+a+'</b> ('+SEASON.key+')'));});
+  if(!items.length){box.style.display="none";return;}
+  box.style.display="";
+  box.innerHTML="⚠ <b>Possible name mismatch"+(items.length>1?"es":"")+" between seasons:</b> "+items.join(" · ")+". If it's the same player, make the spelling match in the sheet so they link up as one player.";
 }
 /* ===================== END SCATTER PLOT ===================== */
 /* ===================== INDIVIDUAL PLAYER TAB ===================== */
