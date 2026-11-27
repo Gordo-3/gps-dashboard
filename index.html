@@ -206,6 +206,29 @@
     .st-dev.up{color:#1a9d57;}.st-dev.dn{color:#cf4a5e;}
     .st-tbl tr.avg td{background:#fffbe0!important;border-top:2px solid var(--y);}
     .st-tbl tr.avg td:first-child{font-family:var(--font-d);font-size:15px;letter-spacing:.1em;}
+    /* Session RPE panel (Team tab) */
+    .rpe-wrap{display:grid;grid-template-columns:minmax(170px,210px) minmax(0,1fr);gap:22px;align-items:start;}
+    .rpe-big{display:flex;flex-direction:column;gap:7px;border-right:1px solid var(--borderl);padding-right:18px;}
+    @media(max-width:800px){.rpe-wrap{grid-template-columns:1fr;}.rpe-big{border-right:none;border-bottom:1px solid var(--borderl);padding:0 0 14px;}}
+    .rpe-lbl{font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--mid);}
+    .rpe-n{font-family:var(--font-d);font-size:68px;line-height:.85;color:var(--ink);font-variant-numeric:tabular-nums;}
+    .rpe-n small{font-size:24px;color:var(--mid);}
+    .rpe-band{align-self:flex-start;font-size:11px;font-weight:700;padding:3px 8px;border-radius:3px;}
+    .rpe-meta{font-size:12px;color:var(--ink2);line-height:1.55;}
+    .rpe-chart{min-width:0;}
+    .rpe-chart svg{display:block;width:100%;height:auto;}
+    .rpe-pl{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;margin-top:16px;}
+    .rpe-p{display:flex;align-items:center;gap:10px;padding:6px 10px;background:var(--surf2);border:1px solid var(--borderl);border-radius:8px;min-width:0;}
+    .rpe-p .nm{flex:1;min-width:0;font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .rpe-p .nm small{display:block;font-size:10px;font-weight:500;color:var(--mid);}
+    .rpe-v{flex:0 0 auto;min-width:38px;text-align:center;font-family:var(--font-d);font-size:20px;line-height:1;padding:5px 6px 3px;border-radius:5px;}
+    .rpe-miss{margin-top:12px;font-size:12px;color:var(--ink2);background:#fff7cc;border:1px solid #f3e38a;border-radius:8px;padding:8px 12px;line-height:1.5;}
+    .rpe-empty{font-size:12px;color:var(--mid);padding:6px 0;}
+    .rb-1{background:#e6efe6;color:#2f5d3a;}.rb-2{background:#fff4a8;color:#4a4200;}.rb-3{background:#FFE500;color:#111;}.rb-4{background:#f59e0b;color:#111;}.rb-5{background:#cf4a5e;color:#fff;}.rb-na{background:#ecebe6;color:#9a9aa1;}
+    #rptModeHint{font-size:11px;color:var(--mid);}
+    .rpt-mode{display:inline-flex;background:var(--surf2);border:1px solid var(--border);border-radius:6px;padding:3px;gap:3px;flex-wrap:wrap;}
+    .rpt-mode button{border:0;background:none;font-family:var(--font-b);font-size:12px;font-weight:600;color:var(--mid);padding:6px 12px;border-radius:4px;cursor:pointer;}
+    .rpt-mode button.on{background:var(--y);color:#111;}
     .st-pl{display:flex;align-items:center;gap:9px;font-weight:600;cursor:pointer;}
     .ev-md{font-weight:700;color:inherit;}
     .chips{display:flex;flex-wrap:wrap;gap:5px;}
@@ -789,7 +812,7 @@
   <div class="spill"><div class="dot loading" id="sDot"></div><span id="sTxt">Loading…</span></div>
   <button class="hdr-btn" onclick="loadData()">Refresh</button>
   <button class="hdr-btn" onclick="openPlayerReportModal()">Player Report</button>
-  <button class="hdr-btn pri" onclick="openReportModal()">Weekly Report</button>
+  <button class="hdr-btn pri" onclick="openReportModal()">Reports</button>
 </header>
 <div class="app">
 <aside class="sb">
@@ -975,6 +998,11 @@
           </div>
           <div class="tbl-scroll"><table class="st-tbl" id="scopeTbl"></table></div>
         </div>
+      </div>
+      <!-- Session RPE (follows the sidebar filters and the clicked bar) -->
+      <div class="panel" id="rpePanel">
+        <div class="phd"><div class="pt-wrap"><div class="pt" id="rpeTitle">Session RPE</div><div class="ptag" id="rpeSub"></div></div></div>
+        <div id="rpeBody"></div>
       </div>
     </div>
 
@@ -1383,10 +1411,15 @@
     </div>
     <div class="rpt-body">
       <div class="rpt-field">
+        <div class="rpt-lbl">Report</div>
+        <div class="rpt-mode" id="rptMode"><button type="button" id="rptModeWk" class="on" onclick="rptSetMode('weekly')">Weekly GPS report</button><button type="button" id="rptModePS" onclick="rptSetMode('post')">Post-session report</button></div>
+        <div class="rpt-hint" id="rptModeHint" style="margin-top:6px"></div>
+      </div>
+      <div class="rpt-field">
         <div class="rpt-lbl">Team Session <span style="font-weight:400;color:var(--mid);text-transform:none;letter-spacing:0">(tick one or more, e.g. MYL 18 and MYL 18/MSnr 20)</span></div>
         <div class="rpt-ts-list" id="rptTsList"></div>
       </div>
-      <div class="rpt-field">
+      <div class="rpt-field" id="rptGameField">
         <div class="rpt-lbl">Game Event</div>
         <select class="rpt-sel" id="rptGame">
           <option value="">Select game…</option>
@@ -1400,15 +1433,15 @@
         <div class="rpt-lbl">Training players <span style="font-weight:400;color:var(--mid);text-transform:none;letter-spacing:0">(combined sessions; guests from other squads always stay)</span></div>
         <select class="rpt-sel" id="rptTrPlayers" onchange="rptSavePrefs()"></select>
       </div>
-      <label class="rpt-opt"><input type="checkbox" id="rptExtra" checked onchange="rptSavePrefs()"><span>Add players' extra sessions this week <span class="rpt-hint">— other groups, training only, on the Training · Player Performance page</span></span></label>
+      <label class="rpt-opt" id="rptExtraOpt"><input type="checkbox" id="rptExtra" checked onchange="rptSavePrefs()"><span>Add players' extra sessions this week <span class="rpt-hint">— other groups, training only, on the Training · Player Performance page</span></span></label>
     </div>
     <div class="rpt-footer">
       <span class="rpt-progress" id="rptProgress"></span>
-      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--mid);cursor:pointer;margin-right:auto">
+      <label id="rptPlayerPDFLbl" style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--mid);cursor:pointer;margin-right:auto">
         <input type="checkbox" id="rptPlayerPDF" style="accent-color:var(--y)"> Player PDF
       </label>
       <button class="rpt-btn rpt-btn-cancel" onclick="closeReportModal()">Cancel</button>
-      <button class="rpt-btn rpt-btn-gen" onclick="generateReport()">Generate PDF</button>
+      <button class="rpt-btn rpt-btn-gen" onclick="rptMode()==='post'?generatePostSession():generateReport()">Generate PDF</button>
     </div>
   </div>
 </div>
@@ -2596,6 +2629,8 @@ function teamPanels(data,scope,all,ctxTs){
   if(scope){list=scope.list;{const n=slotCount(list);title=n===1?(list[0].isGame?"Game":"Session"):n+" Sessions";}sub=scope.name;}
   else{const lg=[...all].reverse().find(s=>s.isGame)||all[all.length-1];list=lg?[lg]:[];title=lg?(lg.isGame?"Last Game":"Last Session"):"Session";sub=lg?String(lg.id).replace(/:.*$/,"").trim()+(lg.e.date?" · "+fmtDate(lg.e.date):""):"";}
   drawScopeTable(list,title,sub,ctxTs);
+  /* RPE: everything in view (not just the last session), or the clicked bar */
+  drawRpePanel(scope?scope.list:all.filter(s=>s.isGame?TV.type!=="training":TV.type!=="game"),scope?scope.name:"",ctxTs);
 }
 /* season baselines per player and per position, from the full splits only */
 let _base=null;
@@ -3239,6 +3274,7 @@ function openReportModal(){
   if(!allData.length){alert('Please wait for data to load first.');return;}
   document.getElementById('rptModal').classList.add('open');
   rptBuildSquads();
+  rptSetMode(rptPref('gps_rpt_mode','weekly'));
 }
 function closeReportModal(){document.getElementById('rptModal').classList.remove('open');}
 
@@ -3929,6 +3965,18 @@ function getSessionSubType(d){
 }
 /* every session type a training row belongs to (one, or two for "Pre-Season Conditioning" etc.) */
 function sessSubTypes(d){const s=new Set([getSessionSubType(d)]);if(PRESEASON_RE.test(d["Event ID"]||""))s.add("preseason");return s;}
+/* what a training session is compared with in the reports: its type from the title (one, or e.g. "preseason+conditioning"),
+   and for Pre-Season also the day named in the title, so Pre-Season Tuesday is compared with earlier Pre-Season Tuesdays
+   (Gordon, 27 Nov 2026: the day names start with the 2027 titles; other types are compared by type only). */
+const SESS_TYPE_LBL={regenerate:'Regenerate',conditioning:'Conditioning',tactical:'Tactical',preseason:'Pre-Season',training:'Training'};
+const SESS_DAY_RE=/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i;
+function sessMatchKey(id){
+  const t=[...sessSubTypes({'Event ID':id})].sort((a,b)=>(a==='preseason'?-1:b==='preseason'?1:a<b?-1:1));
+  let k=t.join('+');
+  if(t.includes('preseason')){const m=String(id||'').match(SESS_DAY_RE);if(m)k+='@'+m[1].toLowerCase();}
+  return k;
+}
+function sessMatchLabel(k,short){const p=String(k).split('@'),d=p[1]?p[1].charAt(0).toUpperCase()+p[1].slice(1):'';return p[0].split('+').map(x=>SESS_TYPE_LBL[x]||x).join(' · ')+(d?' '+(short?d.slice(0,3):d):'');}
 function ipSessKeys(d){return ipSessTypeKey(d)==="game"?new Set(["game"]):sessSubTypes(d);}
 
 function ipMatchesSessType(d,types){
@@ -5555,7 +5603,7 @@ function rlMast(ctx,section,rTop,rSub){
 function rlFoot(ctx,pageStr){
   return `<div style="flex:0 0 30px;display:flex;align-items:center;justify-content:space-between;padding:0 30px;border-top:1px solid ${RL.hair};font-family:${RL.FB};font-size:9px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:${RL.dim}">
     <span style="background:${RL.y};color:#111;font-weight:700;padding:2px 8px;border-radius:3px">${ctx.audience}</span>
-    <span>Spirit FC Weekly GPS Report · ${pageStr}</span></div>`;
+    <span>Spirit FC ${ctx.reportName||'Weekly GPS Report'} · ${pageStr}</span></div>`;
 }
 function rlSecTitle(t){
   return `<div style="display:flex;align-items:center;gap:9px"><span style="width:4px;height:18px;background:${RL.y};border-radius:1px"></span><span style="font-family:${RL.FD};font-size:19px;letter-spacing:.13em;color:${RL.ink}">${t}</span></div>`;
@@ -5575,7 +5623,7 @@ const rlShell = inner => `<div style="width:1122px;height:794px;background:${RL.
    ctx.week={game,gameSub,sessions,phase}; combined squads ("MYL 18/MSnr 20") stack one per line with a yellow rule. */
 function rlTitlePage(ctx){
   const parts=String(ctx.squad||'').split('/').map(s=>s.trim()).filter(Boolean);
-  const big=parts.length>2?88:parts.length>1?118:168;
+  const big=parts.length>2?76:parts.length>1?104:150;
   const sq=parts.map((s,i)=>`${i?`<div style="width:72px;height:4px;background:${RL.y};margin:14px 0 12px"></div>`:''}<div style="font-family:${RL.FD};font-size:${big}px;line-height:.82;color:#f7f6f2;white-space:nowrap">${s.toUpperCase()}</div>`).join('');
   const crest=ctx.crestB64?`<img src="${ctx.crestB64}" style="height:54px;width:auto;object-fit:contain">`:rlCrestMark(ctx,44);
   const wk=ctx.week||{};
@@ -5592,7 +5640,7 @@ function rlTitlePage(ctx){
       <div style="display:flex;align-items:center;gap:14px">${crest}<div style="width:1px;height:30px;background:rgba(255,255,255,.18)"></div>
         <span style="font-size:12px;font-weight:700;letter-spacing:.32em;color:rgba(255,255,255,.6)">SPIRIT FC</span></div>
       <div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding-bottom:40px">
-        <div style="font-size:14px;font-weight:700;letter-spacing:.42em;color:${RL.y};margin-bottom:26px">WEEKLY GPS REPORT</div>
+        <div style="font-family:${RL.FD};font-size:60px;line-height:.9;letter-spacing:.04em;color:${RL.y};margin-bottom:30px;white-space:nowrap">WEEKLY GPS REPORT</div>
         ${sq}
         <div style="font-size:15px;font-weight:500;color:rgba(255,255,255,.6);margin-top:30px;letter-spacing:.04em">${ctx.dateRange}</div>
         ${ctx.seasonLabel?`<div style="font-size:12px;font-weight:600;color:rgba(255,255,255,.35);margin-top:6px;letter-spacing:.12em;text-transform:uppercase">${ctx.seasonLabel}</div>`:''}
@@ -5860,6 +5908,9 @@ function rlLoadPage(ctx,m,page){
         <span style="font-family:${RL.FB};font-size:9.5px;color:${RL.dim};text-align:right">Players counted: completed the whole session (every split)${hasGame?' · '+m.minMins+'+ min in the game':''}</span></div></div>
     ${rlFoot(ctx,page)}`);
 }
+/* team average for one split: the players who did it (minutes and distance above 0), and a real 0 (no sprints) counts.
+   rlAvg below drops every 0, which pushed split averages for HSR / sprint up. */
+function rlAvgDid(rows,col){const v=rows.filter(r=>+r[RPT_COLS.mins]>0&&+r[RPT_COLS.dist]>0).map(r=>nv(r[col])).filter(x=>!isNaN(x)&&isFinite(x));return v.length?v.reduce((a,b)=>a+b,0)/v.length:null;}
 function rlAvg(rows,col){const v=rows.map(r=>+r[col]).filter(x=>!isNaN(x)&&isFinite(x)&&x!==0);return v.length?v.reduce((a,b)=>a+b,0)/v.length:null;}
 function rlSum(rows,col){const v=rows.map(r=>+r[col]).filter(x=>!isNaN(x)&&isFinite(x));return v.length?v.reduce((a,b)=>a+b,0):null;}
 function rlFmt(v,dp=1){return(v==null||isNaN(v))?'—':Number(v).toFixed(dp);}
@@ -5982,8 +6033,7 @@ async function generateReport(){
     const KEYS={dist:E.dist,hsr:E.hsr,spr:E.sprint};
     const mean=(rows,c)=>{const v=rows.map(d=>+d[c]).filter(x=>!isNaN(x)&&isFinite(x));return v.length?v.reduce((a,b)=>a+b,0)/v.length:null;};
     const vals=rows=>{const o={};for(const k in KEYS)o[k]=rows.length?mean(rows,KEYS[k]):null;return o;};
-    const TYPE_LBL={regenerate:'Regenerate',conditioning:'Conditioning',tactical:'Tactical',preseason:'Pre-Season',training:'Training'};
-    const typeKey=id=>[...sessSubTypes({'Event ID':id})].sort((a,b)=>(a==='preseason'?-1:b==='preseason'?1:a<b?-1:1)).join('+');
+    const typeKey=sessMatchKey; /* type, plus the day for Pre-Season (Pre-Season Tuesday vs earlier Pre-Season Tuesdays) */
     const gameKey=id=>{const e=EVX.get(id);return e&&e.kind==='round'?'round':'other';};
     const evDate=id=>{const e=EVX.get(id);return(e&&e.date)||(byEv.get(id)||[]).find(d=>d._date)?._date||null;};
     const weekLo=minD?dayNo(minD)-((minD.getDay()+6)%7):-1e9;
@@ -6007,7 +6057,7 @@ async function generateReport(){
     const sessions=ids.map(id=>{
       const dt=evDate(id),rows=trainRows(id),k=typeKey(id);
       let md=null;if(hasGame){try{md=evMd(id,tsKey(evTs(id)));}catch(e){}}
-      const title=k==='training'?id.replace(/:.*$/,'').trim():k.split('+').map(x=>TYPE_LBL[x]||x).join(' · ');
+      const title=k==='training'?id.replace(/:.*$/,'').trim():sessMatchLabel(k);
       return{lbl:md||(dt?DOW[dt.getDay()]:''),title,sub:dm(dt),isGame:false,n:rows.length,vals:vals(rows),ref:refFor(false,k)};
     });
     if(hasGame){
@@ -6052,7 +6102,7 @@ async function generateReport(){
   /* match team averages (coach only) */
   if(!isPlayerPDF){
     const mc=[RPT_COLS.mins,RPT_COLS.dist,RPT_COLS.wr,RPT_COLS.hsr,RPT_COLS.sprint,RPT_COLS.spd,RPT_COLS.hacc,RPT_COLS.hdec];
-    const rows=['Full Game','1st Half','2nd Half'].map(sp=>{const r=allData.filter(d=>d[RPT_COLS.evid]===gameId&&d[RPT_COLS.split]===sp&&d[RPT_COLS.pos]!=='GK');return[sp,...mc.map(c=>rlFmt(rlAvg(r,c),c===RPT_COLS.dist?1:c===RPT_COLS.spd?1:0))];});
+    const rows=['Full Game','1st Half','2nd Half'].map(sp=>{const r=allData.filter(d=>d[RPT_COLS.evid]===gameId&&d[RPT_COLS.split]===sp&&d[RPT_COLS.pos]!=='GK');return[sp,...mc.map(c=>rlFmt(rlAvgDid(r,c),c===RPT_COLS.dist?1:c===RPT_COLS.spd?1:0))];});
     pages.push(rlTable(ctx,'GAME · TEAM AVERAGES',gameSq+' · '+gameLabel,'No GK','TEAM AVERAGES · BY SPLIT',[{label:'Mins',unit:'min'},{label:'Distance',unit:'km'},{label:'Work Rate',unit:'m/min'},{label:'HSR',unit:'m'},{label:'Sprint',unit:'m'},{label:'Top Speed',unit:'km/h'},{label:'Hard Acc',unit:'#'},{label:'Hard Dec',unit:'#'}],rows,'Page '+(pages.length+1),'Full Game','SPLIT'));
   }
   /* season trend (2 pages) */
@@ -6104,7 +6154,7 @@ async function generateReport(){
         const splits=[...new Set(allData.filter(d=>d[RPT_COLS.evid]===id&&rptRow(d)).map(d=>d[RPT_COLS.split]).filter(Boolean))];
         /* Full Session first, then the rest */
         splits.sort((a,b)=>(a==='Full Session'?-1:b==='Full Session'?1:0));
-        const rows=splits.map(sp=>{const r=allData.filter(d=>d[RPT_COLS.evid]===id&&d[RPT_COLS.split]===sp&&d[RPT_COLS.pos]!=='GK'&&rptRow(d));return[sp,...mc.map(c=>rlFmt(rlAvg(r,c),c===RPT_COLS.dist||c===RPT_COLS.spd?1:0))];});
+        const rows=splits.map(sp=>{const r=allData.filter(d=>d[RPT_COLS.evid]===id&&d[RPT_COLS.split]===sp&&d[RPT_COLS.pos]!=='GK'&&rptRow(d));return[sp,...mc.map(c=>rlFmt(rlAvgDid(r,c),c===RPT_COLS.dist||c===RPT_COLS.spd?1:0))];});
         const lbl=rlMdLbl(id);
         pages.push(rlTable(ctx,'TRAINING · SESSION BREAKDOWN',squad+' · '+lbl,'Team averages by split · no GK','TEAM AVERAGES · BY SESSION SPLIT',[{label:'Mins',unit:'min'},{label:'Distance',unit:'km'},{label:'Work Rate',unit:'m/min'},{label:'HSR',unit:'m'},{label:'Sprint',unit:'m'},{label:'Top Speed',unit:'km/h'},{label:'Hard Acc',unit:'#'},{label:'Hard Dec',unit:'#'}],rows,'Page '+(pages.length+1),'Full Session','SESSION SPLIT'));
       });
@@ -6122,6 +6172,301 @@ async function generateReport(){
   doc.save(filename);
   if(prog) prog.textContent='Done.';
 }
+/* ===================== SESSION RPE PANEL (Team tab, under Last Session) =====================
+   Follows the sidebar filters (dates, squad, sessions, Excl. GK) and the clicked bar, like the other Team panels.
+   RPE = the "Session RPE" column, 1-10; blank or 0 = not answered. A session's RPE is the average of the players who
+   answered; a longer period is the average of its sessions (the weekly report works it out the same way).
+   Up to 12 sessions: one column each. More: one column per Mon-Sun week, or per match day when the chart is grouped
+   by match day. (Gordon, 27 Nov 2026.) */
+const RPE_BANDS=[[3,"Easy","rb-1","#e6efe6"],[5,"Moderate","rb-2","#fff4a8"],[7,"Hard","rb-3","#FFE500"],[9,"Very hard","rb-4","#f59e0b"],[99,"Maximal","rb-5","#cf4a5e"]];
+function rpeBand(v){if(v==null||isNaN(v))return{t:"—",c:"rb-na",hex:"#ecebe6",fg:"#9a9aa1"};const b=RPE_BANDS.find(x=>v<x[0]);return{t:b[1],c:b[2],hex:b[3],fg:b[2]==="rb-5"?"#fff":b[2]==="rb-1"?"#2f5d3a":b[2]==="rb-2"?"#4a4200":"#111"};}
+function rpeVal(d){const v=nv(d&&d["Session RPE"]);return v>0&&v<=10?v:null;}
+function rpeMean(a){return a.length?a.reduce((x,y)=>x+y,0)/a.length:null;}
+/* one entry per player in a session: their answer (or null), position */
+function rpeSess(s){
+  if(s._rpe)return s._rpe;
+  const pl=new Map();
+  s.rows.forEach(d=>{const n=d["Player Full Name"];if(!n)return;const v=rpeVal(d),o=pl.get(n);if(!o)pl.set(n,{v,pos:d["Position"]||""});else if(o.v==null&&v!=null)o.v=v;});
+  const ans=[...pl.values()].map(o=>o.v).filter(v=>v!=null);
+  return s._rpe={pl,n:ans.length,avg:rpeMean(ans)};
+}
+function drawRpePanel(list,scopeName,ctxTs){
+  const body=document.getElementById("rpeBody");if(!body)return;
+  const T=document.getElementById("rpeTitle"),S=document.getElementById("rpeSub");
+  const ss=[...(list||[])].sort((a,b)=>a.day-b.day||(a.isGame-b.isGame));
+  const DOW=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"],dm=day=>{const x=dayDate(day);return x.getDate()+"/"+(x.getMonth()+1);};
+  const yrOf=d=>dayDate(d).getFullYear(),rng=(a,b)=>yrOf(a)===yrOf(b)?fmtRange(a,b)+" "+yrOf(b):dayDate(a).getDate()+" "+MONS[dayDate(a).getMonth()]+" "+yrOf(a)+" – "+dayDate(b).getDate()+" "+MONS[dayDate(b).getMonth()]+" "+yrOf(b);
+  const name=scopeName||(ss.length===1?String(ss[0].id).replace(/:.*$/,"").trim()+" · "+fmtDate(dayDate(ss[0].day)):ss.length?rng(ss[0].day,ss[ss.length-1].day):"");
+  T.textContent="Session RPE"+(name?" — "+name:"");
+  if(!ss.length){S.textContent="";body.innerHTML='<div class="rpe-empty">No sessions match the current filters.</div>';return;}
+  const R=ss.map(s=>({s,r:rpeSess(s)})),withA=R.filter(x=>x.r.avg!=null);
+  let tot=0,ansN=0;R.forEach(x=>{tot+=x.r.pl.size;ansN+=x.r.n;});
+  S.textContent=ss.length+" session"+(ss.length>1?"s":"")+" in view"+(ss.length>1?" · average per session":"")+" · "+(excludeGK?"GKs left out (Excl. GK is on)":"GKs included");
+  if(!withA.length){body.innerHTML='<div class="rpe-empty">No RPE was recorded for the '+(ss.length>1?ss.length+" sessions":"session")+' in view.</div>';return;}
+  const avg=rpeMean(withA.map(x=>x.r.avg)),band=rpeBand(avg);
+  /* columns */
+  let groups,how;
+  if(ss.length<=12){how="session";
+    groups=R.map(x=>{const md=x.s.isGame?"MD":(()=>{try{return evMd(x.s.id,ctxTs);}catch(e){return null;}})();return{l1:x.s.isGame?"Game":(md||DOW[dayDate(x.s.day).getDay()]),l2:dm(x.s.day),tip:String(x.s.id).replace(/:.*$/,"").trim()+" · "+fmtDate(dayDate(x.s.day)),items:[x]};});}
+  else if(TV.group==="md"){how="match day";const m=new Map();
+    R.forEach(x=>{let k=null;if(x.s.isGame)k="MD";else{try{k=evMd(x.s.id,ctxTs);}catch(e){}}if(!k)return;if(!m.has(k))m.set(k,[]);m.get(k).push(x);});
+    groups=MD_ORDER.filter(k=>m.has(k)).map(k=>({l1:k,l2:m.get(k).length+" sess",tip:"All "+k+" sessions",items:m.get(k)}));}
+  else{how="week";const m=new Map();
+    R.forEach(x=>{const k=x.s.day-((dayDate(x.s.day).getDay()+6)%7);if(!m.has(k))m.set(k,[]);m.get(k).push(x);});
+    groups=[...m.keys()].sort((a,b)=>a-b).map(k=>({l1:dm(k),l2:"",tip:"Week of "+fmtDate(dayDate(k)),items:m.get(k)}));}
+  if(!groups.length){groups=R.map(x=>({l1:dm(x.s.day),l2:"",tip:String(x.s.id),items:[x]}));how="session";}
+  groups.forEach(g=>{const a=g.items.filter(x=>x.r.avg!=null);g.v=a.length?rpeMean(a.map(x=>x.r.avg)):null;g.n=g.items.reduce((t,x)=>t+x.r.n,0);g.of=g.items.reduce((t,x)=>t+x.r.pl.size,0);});
+  const n=groups.length,W=900,H=186,L=30,RR=892,TP=24,B=138,slot=(RR-L)/n,bw=Math.min(56,slot*.66),y=v=>B-(B-TP)*v/10,every=Math.max(1,Math.ceil(n/18));
+  let svg='<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Average RPE by '+how+'">';
+  [0,5,10].forEach(t=>{svg+='<line x1="'+L+'" x2="'+RR+'" y1="'+y(t)+'" y2="'+y(t)+'" stroke="#000" stroke-opacity="'+(t?.07:.2)+'"/><text x="'+(L-7)+'" y="'+(y(t)+3.5)+'" text-anchor="end" font-size="10" font-family="DM Sans" fill="#9a9aa1">'+t+'</text>';});
+  let lowResp=false;
+  groups.forEach((g,i)=>{const cx=L+slot*(i+.5),x0=cx-bw/2,tip=escA(g.tip+": "+(g.v==null?"no RPE":"avg "+g.v.toFixed(1))+" · "+g.n+" of "+g.of+" answered");
+    if(g.v==null)svg+='<rect x="'+x0.toFixed(1)+'" y="'+(B-22)+'" width="'+bw.toFixed(1)+'" height="22" rx="2" fill="#f3f2ee" stroke="#c9c9c4" stroke-dasharray="3,2"><title>'+tip+'</title></rect>';
+    else{const yy=y(g.v),b=rpeBand(g.v);svg+='<rect x="'+x0.toFixed(1)+'" y="'+yy.toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+(B-yy).toFixed(1)+'" rx="3" fill="'+b.hex+'" stroke="rgba(0,0,0,.12)"><title>'+tip+'</title></rect>';
+      if(n<=16)svg+='<text x="'+cx.toFixed(1)+'" y="'+(yy-5).toFixed(1)+'" text-anchor="middle" font-family="Bebas Neue" font-size="'+(n<=8?19:15)+'" fill="#1c1c1c">'+g.v.toFixed(1)+'</text>';
+      if(g.of&&g.n/g.of<.5){lowResp=true;svg+='<circle cx="'+cx.toFixed(1)+'" cy="'+(yy-(n<=16?24:6)).toFixed(1)+'" r="2.8" fill="#cf4a5e"/>';}}
+    if(i%every===0){svg+='<text x="'+cx.toFixed(1)+'" y="'+(B+15)+'" text-anchor="middle" font-family="Bebas Neue" font-size="'+(n<=12?15:12)+'" letter-spacing=".03em" fill="#1c1c1c">'+escA(g.l1)+'</text>';
+      if(g.l2&&n<=16)svg+='<text x="'+cx.toFixed(1)+'" y="'+(B+28)+'" text-anchor="middle" font-family="DM Sans" font-size="9.5" fill="#7a7a7a">'+escA(g.l2)+'</text>';}
+  });
+  svg+='<line x1="'+L+'" x2="'+RR+'" y1="'+y(avg).toFixed(1)+'" y2="'+y(avg).toFixed(1)+'" stroke="#cf4a5e" stroke-width="1.6" stroke-dasharray="5,3"/><text x="'+(RR-2)+'" y="'+(y(avg)-5).toFixed(1)+'" text-anchor="end" font-size="10" font-weight="700" font-family="DM Sans" fill="#cf4a5e">avg '+avg.toFixed(1)+'</text>';
+  svg+='<text x="'+L+'" y="'+(H-4)+'" font-size="9.5" font-family="DM Sans" fill="#7a7a7a">'+(how==="session"?"One column per session":how==="week"?"One column per week (Mon–Sun) · too many sessions to show one by one":"One column per match day")+(lowResp?" · red dot = under half answered":"")+'</text></svg>';
+  /* players */
+  const P=new Map();R.forEach(x=>x.r.pl.forEach((o,nm)=>{let p=P.get(nm);if(!p)P.set(nm,p={pos:o.pos,a:[],of:0});p.of++;if(o.v!=null)p.a.push(o.v);}));
+  const pls=[...P.entries()].map(([nm,p])=>({nm,pos:p.pos,of:p.of,n:p.a.length,v:rpeMean(p.a)}));
+  const got=pls.filter(p=>p.v!=null).sort((a,b)=>b.v-a.v||a.nm.localeCompare(b.nm)),miss=pls.filter(p=>p.v==null).sort((a,b)=>b.of-a.of||a.nm.localeCompare(b.nm));
+  const multi=ss.length>1,pct=tot?Math.round(ansN/tot*100):0;
+  let hi=null;if(multi)groups.forEach(g=>{if(g.v!=null&&(!hi||g.v>hi.v))hi=g;});
+  const meta='<b>'+ansN+' of '+tot+'</b> '+(multi?'answers':'players answered')+' ('+pct+'%)'+(multi?'<br>'+withA.length+' of '+ss.length+' sessions have RPE':'')+(hi&&groups.length>1?'<br>Highest '+(how==="week"?"week":how==="match day"?"":"session")+': <b>'+escA(hi.l1)+(how==="session"?' '+escA(hi.l2):'')+'</b> ('+hi.v.toFixed(1)+')':'');
+  body.innerHTML='<div class="rpe-wrap"><div class="rpe-big"><div class="rpe-lbl">Avg session RPE</div><div class="rpe-n">'+avg.toFixed(1)+'<small> /10</small></div><span class="rpe-band '+band.c+'">'+band.t+'</span><div class="rpe-meta">'+meta+'</div></div>'
+    +'<div class="rpe-chart">'+svg+'</div></div>'
+    +'<div class="rpe-pl">'+got.map(p=>{const b=rpeBand(p.v);return'<div class="rpe-p">'+imgEl(p.nm,"rava",30)+'<span class="nm"><span class="pp-trigger" data-player="'+escA(p.nm)+'">'+escA(p.nm)+'</span><small>'+escA(p.pos)+(multi?' · answered '+p.n+'/'+p.of:'')+'</small></span><span class="rpe-v '+b.c+'">'+(multi?p.v.toFixed(1):p.v)+'</span></div>';}).join("")+'</div>'
+    +(miss.length?'<div class="rpe-miss"><b>No RPE recorded:</b> '+miss.map(p=>escA(p.nm)+(multi?' (0/'+p.of+')':'')).join(", ")+'</div>':'');
+}
+
+/* ===================== POST-SESSION REPORT (coaches) =====================
+   A short report for coaches after training: one cover, then for each ticked training session (oldest first) a summary
+   page (session RPE, team averages by split, this session against the average of earlier sessions of the same kind)
+   and a player page (headshots). Same look as the weekly report, light cover so the two are told apart.
+   "Same kind" = sessMatchKey(): type from the title, plus the day for Pre-Season. Graph players = the weekly report's
+   rule (own squad, outfield, completed every split of the session). RPE = everyone who answered, GKs included.
+   (Gordon, 27 Nov 2026.) */
+function rptMode(){const b=document.getElementById('rptModePS');return b&&b.classList.contains('on')?'post':'weekly';}
+function rptSetMode(m){
+  const post=m==='post';
+  document.getElementById('rptModeWk').classList.toggle('on',!post);document.getElementById('rptModePS').classList.toggle('on',post);
+  ['rptGameField','rptExtraOpt','rptPlayerPDFLbl'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display=post?'none':'';});
+  const h=document.getElementById('rptModeHint');if(h)h.textContent=post?'Training sessions only. One cover, then a summary page and a player page for each ticked session.':'Game and training week, as before.';
+  try{localStorage.setItem('gps_rpt_mode',post?'post':'weekly');}catch(e){}
+}
+const RL_DOW=['SUN','MON','TUE','WED','THU','FRI','SAT'];
+function rlFitText(txt,max,size,cls){ /* SVG text squeezed to fit when long (Bebas is about 0.42em per letter) */
+  return (String(txt).length*size*0.42>max)?' textLength="'+max+'" lengthAdjust="spacingAndGlyphs"':'';
+}
+function rlPsColSVG(v,r,n,dp,lblA,lblB,matchLbl){
+  const W=300,H=250,L=14,R=286,T=34,B=192,bw=70,c1=L+(R-L)*.28,c2=L+(R-L)*.72;
+  const vv=v==null?0:v,top=Math.max(vv,r||0,0.0001)*1.15,y=x=>B-(B-T)*x/top,FB="Archivo, DM Sans, sans-serif";
+  const bar=(cx,val,fill,extra)=>{const yy=y(val),h=B-yy,rr=Math.min(5,h);return'<path d="M'+(cx-bw/2)+','+B+' V'+(yy+rr)+' Q'+(cx-bw/2)+','+yy+' '+(cx-bw/2+rr)+','+yy+' H'+(cx+bw/2-rr)+' Q'+(cx+bw/2)+','+yy+' '+(cx+bw/2)+','+(yy+rr)+' V'+B+' Z" fill="'+fill+'" '+(extra||'')+'/>';};
+  const vdp=x=>(dp===0&&x<10&&x>0)?1:dp;
+  let s='<svg viewBox="0 0 '+W+' '+H+'" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">';
+  s+='<line x1="'+L+'" x2="'+R+'" y1="'+B+'" y2="'+B+'" stroke="#000" stroke-opacity=".2"/>';
+  if(v!=null){s+=bar(c1,vv,RL.ink2);s+='<text x="'+c1+'" y="'+(y(vv)-7)+'" text-anchor="middle" font-family="Bebas Neue" font-size="26" fill="'+RL.ink+'" stroke="#fff" stroke-width="5" stroke-linejoin="round" paint-order="stroke">'+vv.toFixed(vdp(vv))+'</text>';}
+  else s+='<text x="'+c1+'" y="'+(B-8)+'" text-anchor="middle" font-family="'+FB+'" font-size="9" font-weight="700" fill="'+RL.dim+'">NO DATA</text>';
+  if(r!=null){
+    s+=bar(c2,r,RL.inset,'stroke="rgba(0,0,0,.1)"');
+    s+='<line x1="'+(c2-bw/2-6)+'" x2="'+(c2+bw/2+6)+'" y1="'+y(r)+'" y2="'+y(r)+'" stroke="'+RL.loss+'" stroke-width="2.2" stroke-dasharray="5,3"/>';
+    s+='<text x="'+c2+'" y="'+(y(r)-9)+'" text-anchor="middle" font-family="Bebas Neue" font-size="22" fill="'+RL.loss+'" stroke="#fff" stroke-width="5" stroke-linejoin="round" paint-order="stroke">'+r.toFixed(vdp(r))+'</text>';
+    if(v!=null&&r>0){const p=(v/r-1)*100,up=p>=0.5,dn=p<=-0.5,ar=up?'▲':dn?'▼':'=';
+      s+='<rect x="'+(c1-30)+'" y="'+(B+35)+'" width="60" height="17" rx="8.5" fill="'+(up?RL.band:RL.inset)+'"/><text x="'+c1+'" y="'+(B+47)+'" text-anchor="middle" font-family="'+FB+'" font-size="10.5" font-weight="700" fill="'+(up?'#fff':RL.ink)+'">'+ar+' '+Math.abs(p).toFixed(0)+'%</text>';}
+  }else{
+    s+='<rect x="'+(c2-bw/2)+'" y="'+(B-90)+'" width="'+bw+'" height="90" rx="5" fill="none" stroke="'+RL.dim+'" stroke-width="1.4" stroke-dasharray="4,3"/>';
+    s+='<text x="'+c2+'" y="'+(B-52)+'" text-anchor="middle" font-family="'+FB+'" font-size="9" font-weight="700" fill="'+RL.mut+'">NO EARLIER</text><text x="'+c2+'" y="'+(B-40)+'" text-anchor="middle" font-family="'+FB+'" font-size="9" font-weight="700" fill="'+RL.mut+'">SESSION YET</text>';
+  }
+  const ml=String(matchLbl).toUpperCase(),avgL='AVG · '+String(lblB).toUpperCase();
+  s+='<text x="'+c1+'" y="'+(B+17)+'" text-anchor="middle" font-family="Bebas Neue" font-size="17" letter-spacing=".04em" fill="'+RL.ink+'"'+rlFitText(lblA,124,17)+'>'+escA(lblA)+'</text>';
+  s+='<text x="'+c1+'" y="'+(B+29)+'" text-anchor="middle" font-family="'+FB+'" font-size="9" font-weight="700" letter-spacing=".06em" fill="'+RL.mut+'"'+(ml.length*5.6>124?' textLength="124" lengthAdjust="spacingAndGlyphs"':'')+'>'+escA(ml)+'</text>';
+  s+='<text x="'+c2+'" y="'+(B+17)+'" text-anchor="middle" font-family="Bebas Neue" font-size="17" letter-spacing=".04em" fill="'+RL.loss+'"'+rlFitText(avgL,124,17)+'>'+escA(avgL)+'</text>';
+  s+='<text x="'+c2+'" y="'+(B+29)+'" text-anchor="middle" font-family="'+FB+'" font-size="9" font-weight="700" letter-spacing=".06em" fill="'+RL.mut+'">'+(n||0)+' EARLIER SESSION'+(n===1?'':'S')+'</text>';
+  return s+'</svg>';
+}
+const rlCard='background:#fff;border:1px solid '+RL.hair+';border-radius:10px;box-shadow:0 1px 2px rgba(0,0,0,.04)';
+function rlPsHead(b64,name,size){
+  return b64?'<img src="'+b64+'" style="width:'+size+'px;height:'+size+'px;border-radius:8px;border:1px solid '+RL.hair+';object-fit:cover;flex-shrink:0">'
+    :'<div style="width:'+size+'px;height:'+size+'px;border-radius:8px;background:#dcdad2;border:1px solid '+RL.hair+';display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#55555c;flex-shrink:0">'+escA((name||'').split(' ').map(w=>w[0]||'').join('').slice(0,2))+'</div>';
+}
+/* cover: light paper, yellow edge, report name large; right = this session (one) or the list of sessions (several) */
+function rlPostCover(ctx,S){
+  const parts=String(ctx.squad||'').split('/').map(s=>s.trim()).filter(Boolean),big=parts.length>2?72:parts.length>1?96:140;
+  const sq=parts.map((s,i)=>(i?'<div style="width:72px;height:4px;background:'+RL.y+';margin:14px 0 12px"></div>':'')+'<div style="font-family:'+RL.FD+';font-size:'+big+'px;line-height:.82;color:'+RL.ink+';white-space:nowrap">'+escA(s.toUpperCase())+'</div>').join('');
+  const k='rgba(255,255,255,.5)',line='rgba(255,255,255,.14)';
+  let right;
+  if(S.length===1){const s=S[0];
+    const fact=(a,b,c)=>'<div style="padding:16px 0;border-top:1.5px solid '+line+'"><div style="font-size:10.5px;font-weight:700;letter-spacing:.2em;color:'+k+'">'+a+'</div><div style="font-family:'+RL.FD+';font-size:40px;line-height:.95;color:#f7f6f2;margin-top:6px">'+b+'</div>'+(c?'<div style="font-size:12px;font-weight:600;color:'+k+';margin-top:3px">'+c+'</div>':'')+'</div>';
+    const gk=s.full.filter(d=>d[RPT_COLS.pos]==='GK').length;
+    right='<div style="font-family:'+RL.FD+';font-size:30px;letter-spacing:.12em;color:#f7f6f2;margin-bottom:18px">THIS SESSION</div>'
+      +fact('SESSION',escA(s.matchLbl),escA(s.lbl+(s.splitN>1?' · '+(s.splitN-1)+' drill'+(s.splitN>2?'s':''):'')))
+      +fact('DURATION',s.mins!=null?Math.round(s.mins)+' min':'—','Full session')
+      +fact('PLAYERS',String(s.full.length),(s.full.length-gk)+' outfield · '+gk+' GK')
+      +fact('AVG SESSION RPE',s.rpe!=null?s.rpe.toFixed(1)+' / 10':'—',s.ans.length+' of '+s.full.length+' answered');
+  }else{
+    const shown=S.slice(0,8),fs=S.length>5?28:36,pad=S.length>5?10:16;
+    right='<div style="font-family:'+RL.FD+';font-size:30px;letter-spacing:.12em;color:#f7f6f2;margin-bottom:14px">SESSIONS IN THIS REPORT</div>'
+      +shown.map((s,i)=>'<div style="display:flex;align-items:center;gap:16px;padding:'+pad+'px 0;border-top:1.5px solid '+line+'"><span style="font-family:'+RL.FD+';font-size:16px;color:'+k+';width:18px">'+(i+1)+'</span><div style="flex:1;min-width:0"><div style="font-family:'+RL.FD+';font-size:'+fs+'px;line-height:.95;color:#f7f6f2;white-space:nowrap">'+escA(s.lbl)+'</div><div style="font-size:12px;font-weight:600;color:'+k+';margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+escA(s.matchLbl)+' · '+s.full.length+' players</div></div><div style="text-align:right"><div style="font-size:9px;font-weight:700;letter-spacing:.16em;color:'+k+'">RPE</div><div style="font-family:'+RL.FD+';font-size:'+(fs-2)+'px;line-height:.9;color:'+RL.y+'">'+(s.rpe!=null?s.rpe.toFixed(1):'—')+'</div></div></div>').join('')
+      +(S.length>8?'<div style="padding:10px 0;border-top:1.5px solid '+line+';font-size:12px;font-weight:600;color:'+k+'">+ '+(S.length-8)+' more</div>':'')
+      +'<div style="padding-top:12px;border-top:1.5px solid '+line+';font-size:11px;font-weight:600;color:'+k+'">Each session: summary page, then player stats</div>';
+  }
+  const crest=ctx.crestB64?'<img src="'+ctx.crestB64+'" style="height:54px;width:auto;object-fit:contain">':rlCrestMark(ctx,44);
+  return '<div style="width:1122px;height:794px;background:'+RL.bg+';font-family:'+RL.FB+';position:relative;overflow:hidden">'
+   +'<div style="position:absolute;left:0;top:0;bottom:0;width:14px;background:'+RL.y+'"></div>'
+   +'<div style="position:absolute;left:0;top:0;bottom:0;width:640px;padding:58px 64px 0;box-sizing:border-box;display:flex;flex-direction:column">'
+   +'<div style="display:flex;align-items:center;gap:14px">'+crest+'<div style="width:1px;height:30px;background:'+RL.hair+'"></div><span style="font-size:12px;font-weight:700;letter-spacing:.32em;color:'+RL.mut+'">SPIRIT FC</span></div>'
+   +'<div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding-bottom:40px">'
+   +'<div style="font-family:'+RL.FD+';font-size:60px;line-height:.9;letter-spacing:.04em;color:'+RL.ink+';margin-bottom:30px;white-space:nowrap"><span style="background:linear-gradient(transparent 58%,'+RL.y+' 58%,'+RL.y+' 92%,transparent 92%);padding:0 4px">POST-SESSION REPORT</span></div>'
+   +sq
+   +'<div style="font-size:15px;font-weight:500;color:'+RL.mut+';margin-top:30px;letter-spacing:.04em">'+escA(ctx.dateLong)+'</div>'
+   +(ctx.seasonLabel?'<div style="font-size:12px;font-weight:600;color:'+RL.dim+';margin-top:6px;letter-spacing:.12em;text-transform:uppercase">'+escA(ctx.seasonLabel)+'</div>':'')
+   +'</div><div style="height:56px;flex:0 0 56px;display:flex;align-items:center;justify-content:space-between;border-top:1px solid '+RL.hair+';font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:'+RL.mut+'"><span style="background:'+RL.y+';color:#111;font-weight:700;padding:2px 8px;border-radius:3px">'+ctx.audience+'</span><span>Catapult · Training Data</span></div></div>'
+   +'<div style="position:absolute;right:0;top:0;bottom:0;width:482px;background:'+RL.band+';padding:58px 54px 0;box-sizing:border-box;overflow:hidden">'+right+'</div></div>';
+}
+function rlPostSummary(ctx,s,page){
+  const E=RPT_COLS,mc=[E.mins,E.dist,E.wr,E.hsr,E.sprint,E.spd,E.hacc,E.hdec],dps=[0,2,0,0,0,1,0,0];
+  const cols=['Mins','Distance','Work Rate','HSR','Sprint','Top Speed','Hard Acc','Hard Dec'],units=['min','km','m/min','m','m','km/h','#','#'];
+  const nS=s.splits.length,rowH=Math.max(16,Math.min(33,Math.floor(178/Math.max(nS,1)))),fs=rowH>=28?18:rowH>=22?15:13;
+  const th='<div style="display:flex;background:'+RL.band+';height:34px;flex:0 0 34px"><div style="width:170px;flex:0 0 170px;display:flex;align-items:center;padding-left:14px;font-size:10px;font-weight:700;letter-spacing:.12em;color:rgba(255,255,255,.55)">SPLIT</div>'+cols.map((c,i)=>'<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1;border-left:1px solid rgba(255,255,255,.08)"><div style="font-family:'+RL.FD+';font-size:14px;letter-spacing:.04em;color:'+RL.y+'">'+c+'</div><div style="font-size:7.5px;font-weight:600;color:rgba(255,255,255,.45);margin-top:2px">'+units[i]+'</div></div>').join('')+'</div>';
+  const rows=s.splits.map((sp,ri)=>{const r=s.rows.filter(d=>d[E.split]===sp&&d[E.pos]!=='GK'),hl=sp==='Full Session';
+    return'<div style="display:flex;flex:0 0 '+rowH+'px;background:'+(hl?'#fffbe0':ri%2?'#faf9f5':'#fff')+';border-top:'+(hl?'2px solid '+RL.y:'1px solid rgba(0,0,0,.06)')+'"><div style="width:170px;flex:0 0 170px;display:flex;align-items:center;padding:0 8px 0 14px;font-family:'+(hl?RL.FD:RL.FB)+';font-size:'+(hl?'16px;letter-spacing:.05em':(rowH>=22?12:10.5)+'px;font-weight:600')+';color:'+RL.ink+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+escA(sp)+'</div>'
+      +mc.map((c,i)=>{const v=rlAvgDid(r,c);return'<div style="flex:1;display:flex;align-items:center;justify-content:center;border-left:1px solid rgba(0,0,0,.05);font-family:'+RL.FD+';font-size:'+fs+'px;color:'+RL.ink+'">'+rlFmt(v,(c===E.hsr||c===E.sprint)&&v>0&&v<10?1:dps[i])+'</div>';}).join('')+'</div>';}).join('');
+  /* RPE card */
+  const b=rpeBand(s.rpe),cnt={};s.ans.forEach(v=>{const k=Math.round(v);cnt[k]=(cnt[k]||0)+1;});
+  const ks=Object.keys(cnt).map(Number);let lo=ks.length?Math.min(...ks):5,hi=ks.length?Math.max(...ks):8;while(hi-lo<3){if(lo>1)lo--;else hi++;}
+  const mxC=Math.max(1,...Object.values(cnt)),hist=[];for(let k=lo;k<=hi&&k<=10;k++)hist.push(k);
+  const histo=hist.map(k=>'<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:3px"><span style="font-family:'+RL.FD+';font-size:14px;color:'+RL.ink+'">'+(cnt[k]||0)+'</span><div style="width:'+(hist.length>6?16:22)+'px;height:'+Math.round((cnt[k]||0)/mxC*58)+'px;background:'+rpeBand(k).hex+';border:1px solid rgba(0,0,0,.1);border-radius:3px"></div><span style="font-size:8.5px;font-weight:700;color:'+RL.mut+'">'+k+'</span></div>').join('');
+  const rr=s.ref.rpe,rpeCmp=s.rpe==null?'No RPE recorded':rr!=null?'avg of '+s.ref.rpeN+' earlier: <b>'+rr.toFixed(1)+'</b> <b style="color:'+(s.rpe>=rr?RL.ink:RL.loss)+'">'+(s.rpe>=rr?'▲':'▼')+' '+Math.abs((s.rpe/rr-1)*100).toFixed(0)+'%</b>':'first '+escA(s.matchLbl)+', no average yet';
+  const panel=(t,u,key,dp)=>'<div style="flex:1;'+rlCard+';border-top:3px solid '+RL.y+';padding:10px 14px 4px;display:flex;flex-direction:column;min-width:0"><div style="display:flex;align-items:baseline"><span style="font-family:'+RL.FD+';font-size:22px;letter-spacing:.08em;color:'+RL.ink+'">'+t+'</span><span style="margin-left:auto;font-size:9.5px;font-weight:700;letter-spacing:.1em;color:'+RL.mut+';background:'+RL.inset+';border-radius:4px;padding:3px 7px">'+u+'</span></div><div style="flex:1;min-height:0">'+rlPsColSVG(s.vals[key],s.ref.v?s.ref.v[key]:null,s.ref.n,dp,s.lbl,sessMatchLabel(s.key,true),s.matchLbl)+'</div></div>';
+  return rlShell(rlMast(ctx,'SESSION SUMMARY',escA(ctx.squad+' · '+s.lbl+' · '+s.matchLbl),'Team averages · outfield (no GK) · RPE from every player who answered')
+   +'<div style="flex:1;display:flex;flex-direction:column;padding:14px 28px 10px;gap:12px;min-height:0">'
+   +'<div style="display:flex;gap:16px;flex:0 0 250px;min-height:250px">'
+   +'<div style="width:250px;flex:0 0 250px;'+rlCard+';padding:14px 16px;display:flex;flex-direction:column;gap:8px">'+rlSecTitle('SESSION RPE')
+   +'<div style="display:flex;align-items:baseline;gap:6px;margin-top:4px"><span style="font-family:'+RL.FD+';font-size:76px;line-height:.82;color:'+RL.ink+'">'+(s.rpe!=null?s.rpe.toFixed(1):'—')+'</span><span style="font-family:'+RL.FD+';font-size:24px;color:'+RL.dim+'">/10</span>'+(s.rpe!=null?'<span style="margin-left:auto;font-size:10px;font-weight:700;background:'+b.hex+';color:'+b.fg+';padding:3px 7px;border-radius:3px">'+b.t.toUpperCase()+'</span>':'')+'</div>'
+   +'<div style="font-size:11px;color:'+RL.ink2+';line-height:1.45">'+(s.full.length&&s.ans.length*2<s.full.length?'<b style="color:'+RL.loss+'">Only '+s.ans.length+' of '+s.full.length+' answered</b>':s.ans.length+' of '+s.full.length+' answered')+' · '+rpeCmp+'</div>'
+   +'<div style="flex:1;display:flex;gap:3px;align-items:flex-end;padding-top:4px;border-top:1px solid '+RL.hair+'">'+(s.ans.length?histo:'<span style="font-size:10px;color:'+RL.dim+'">No answers</span>')+'</div></div>'
+   +'<div style="flex:1;display:flex;flex-direction:column;gap:8px;min-width:0">'+rlSecTitle('TEAM AVERAGES · BY SESSION SPLIT')+'<div style="'+rlCard+';overflow:hidden;display:flex;flex-direction:column">'+th+rows+'</div></div></div>'
+   +'<div style="display:flex;align-items:center;justify-content:space-between;gap:12px">'+rlSecTitle('THIS SESSION VS EARLIER '+escA(s.matchLbl.toUpperCase())+' SESSIONS')
+   +'<span style="display:flex;gap:16px;font-size:10px;font-weight:600;color:'+RL.mut+';white-space:nowrap"><span style="display:flex;gap:6px;align-items:center"><span style="width:12px;height:12px;border-radius:2px;background:'+RL.ink2+'"></span>This session</span><span style="display:flex;gap:6px;align-items:center"><span style="width:18px;border-top:2px dashed '+RL.loss+'"></span>Avg of earlier sessions of the same kind</span></span></div>'
+   +'<div style="flex:1;display:flex;gap:16px;min-height:0">'+panel('DISTANCE','KM','dist',2)+panel('HIGH-SPEED RUNNING','M','hsr',0)+panel('SPRINT DISTANCE','M','spr',0)+'</div>'
+   +'<div style="font-size:9.5px;color:'+RL.dim+';text-align:right">Graphs: squad average per player, own squad, outfield, completed the whole session ('+s.tr.length+' player'+(s.tr.length===1?'':'s')+')</div></div>'
+   +rlFoot(ctx,page));
+}
+function rlPostPlayers(ctx,s,chunk,part,parts,heads,mx,page){
+  const C=[[RPT_COLS.mins,'Mins','min',0],[RPT_COLS.dist,'Distance','km',2],[RPT_COLS.wr,'Dist / min','m/min',0],[RPT_COLS.hsr,'HSR','m',0],[RPT_COLS.sprint,'Sprint','m',0],[RPT_COLS.hacc,'Hard Acc','#',0],[RPT_COLS.hdec,'Hard Dec','#',0],[RPT_COLS.spd,'Max Speed','km/h',1],['rpe','RPE','/10',0]];
+  const th='<div style="display:flex;background:'+RL.band+';height:40px;flex:0 0 40px"><div style="width:260px;flex:0 0 260px;display:flex;align-items:center;padding-left:16px;font-size:10px;font-weight:700;letter-spacing:.12em;color:rgba(255,255,255,.55)">PLAYER</div>'+C.map(c=>'<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1;border-left:1px solid rgba(255,255,255,.08);'+(c[0]==='rpe'?'background:#26262b':'')+'"><div style="font-family:'+RL.FD+';font-size:15px;letter-spacing:.04em;color:'+RL.y+'">'+c[1]+'</div><div style="font-size:7.5px;font-weight:600;color:rgba(255,255,255,.45);margin-top:2px">'+c[2]+'</div></div>').join('')+'</div>';
+  const nRows=chunk.length,rowH=Math.min(52,Math.floor(560/Math.max(nRows,1))),hs=Math.min(34,rowH-8);
+  let body='',seenGk=false,i=0;
+  chunk.forEach(d=>{const gk=d[RPT_COLS.pos]==='GK';
+    if(gk&&!seenGk){seenGk=true;body+='<div style="flex:0 0 22px;display:flex;align-items:center;padding-left:16px;background:'+RL.inset+';font-size:9px;font-weight:700;letter-spacing:.16em;color:'+RL.mut+';border-top:1px solid rgba(0,0,0,.08)">GOALKEEPERS</div>';i=0;}
+    const nm=d[RPT_COLS.player];
+    body+='<div style="display:flex;flex:0 0 '+rowH+'px;align-items:stretch;background:'+(i%2?'#faf9f5':'#fff')+';border-top:1px solid rgba(0,0,0,.06)">'
+      +'<div style="width:260px;flex:0 0 260px;display:flex;align-items:center;gap:10px;padding-left:12px;min-width:0">'+rlPsHead(heads[nm],nm,hs)+'<div style="line-height:1.15;min-width:0"><div style="font-size:13px;font-weight:600;color:'+RL.ink+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+escA(nm)+'</div><div style="font-size:9px;font-weight:700;letter-spacing:.06em;color:'+RL.mut+'">'+escA((d[RPT_COLS.pos]||'')+(d[RPT_COLS.squad]?' · '+d[RPT_COLS.squad]:''))+'</div></div></div>'
+      +C.map(c=>{if(c[0]==='rpe'){const v=rpeVal(d),bb=rpeBand(v);return'<div style="flex:1;display:flex;align-items:center;justify-content:center;border-left:1px solid rgba(0,0,0,.05)"><span style="font-family:'+RL.FD+';font-size:20px;line-height:1;padding:5px 10px 3px;border-radius:5px;background:'+bb.hex+';color:'+bb.fg+'">'+(v==null?'—':(+v.toFixed(1)))+'</span></div>';}
+        const v=nv(d[c[0]]),lead=!gk&&c[0]!==RPT_COLS.mins&&!isNaN(v)&&v>0&&mx[c[0]]!=null&&Math.abs(v-mx[c[0]])<1e-9;
+        return'<div style="flex:1;display:flex;align-items:center;justify-content:center;border-left:1px solid rgba(0,0,0,.05)"><span style="font-family:'+RL.FD+';font-size:20px;line-height:1;color:'+RL.ink+';'+(lead?'background:'+RL.y+';padding:4px 8px 2px;border-radius:4px':'')+'">'+(isNaN(v)?'—':v.toFixed((c[0]===RPT_COLS.hsr||c[0]===RPT_COLS.sprint)&&v>0&&v<10?1:c[3]))+'</span></div>';}).join('')+'</div>';
+    i++;});
+  const leg='<span style="display:flex;gap:14px;font-size:10px;font-weight:600;color:'+RL.mut+';align-items:center"><span style="display:flex;gap:6px;align-items:center"><span style="width:14px;height:10px;border-radius:2px;background:'+RL.y+'"></span>Session high (outfield)</span><span>RPE:</span>'+[[2,'Easy'],[4,'Moderate'],[6,'Hard'],[8,'Very hard'],[9.5,'Max']].map(a=>'<span style="display:flex;gap:4px;align-items:center"><span style="width:10px;height:10px;border-radius:2px;background:'+rpeBand(a[0]).hex+';border:1px solid rgba(0,0,0,.1)"></span>'+a[1]+'</span>').join('')+'</span>';
+  return rlShell(rlMast(ctx,'PLAYER STATS',escA(ctx.squad+' · '+s.lbl+' · '+s.matchLbl),'Full session split · outfield sorted by distance · GKs last')
+   +'<div style="flex:1;display:flex;flex-direction:column;padding:14px 28px 8px;min-height:0">'
+   +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'+rlSecTitle('PER PLAYER · '+escA(s.lbl)+(parts>1?' ('+part+'/'+parts+')':''))+leg+'</div>'
+   +'<div style="'+rlCard+';overflow:hidden;display:flex;flex-direction:column">'+th+body+'</div></div>'
+   +rlFoot(ctx,page));
+}
+/* the pages of a post-session report (kept apart from the PDF step so it can be checked on screen) */
+async function rlPostSessionPages(o){
+  const tsSel=o.tsSel,tsSet=new Set(tsSel),trP=o.trP||'all',E=RPT_COLS;
+  const comboParts=new Set(tsSel.filter(isCombinedTs).flatMap(tsParts));
+  const rptRow=d=>{if(!tsSet.has(d['Team Session']))return false;if(trP==='all')return true;const sq=tsKey(d['Squad']);return!(comboParts.has(sq)&&sq!==trP);};
+  const squad=trP!=='all'?trP:tsSel.length===1?tsSel[0]:[...new Set(tsSel.flatMap(tsParts))].sort((a,b)=>squadSortOrder(a)-squadSortOrder(b)).join('/');
+  const byEv=new Map();allData.forEach(d=>{const id=d[E.evid];if(!id)return;let a=byEv.get(id);if(!a)byEv.set(id,a=[]);a.push(d);});
+  const evTs=id=>{const r=(byEv.get(id)||[]).find(d=>tsSet.has(d['Team Session']));return r?r['Team Session']:squad;};
+  const firstPer=rows=>{const seen=new Set();return rows.filter(d=>{const n=d[E.player];if(!n||seen.has(n))return false;seen.add(n);return true;});};
+  /* same players as the weekly report's team-load graphs: own squad, outfield, did every split of the session */
+  const ownSq=d=>{const sq=tsKey(d['Squad']),ts=tsKey(d['Team Session']);return!sq||!ts||tsParts(ts).includes(sq);};
+  const trainRows=id=>{
+    const rs=byEv.get(id)||[];
+    const full=firstPer(rs.filter(d=>d[E.split]==='Full Session'&&d[E.pos]!=='GK'&&rptRow(d)&&ownSq(d)));
+    const names=new Set(full.map(d=>d[E.player])),sp=new Map(),all=new Set();
+    rs.forEach(d=>{const n=d[E.player],x=d[E.split];if(!names.has(n)||!x)return;if(!sp.has(n))sp.set(n,new Set());sp.get(n).add(x);});
+    const cnt=new Map();sp.forEach(s=>s.forEach(x=>cnt.set(x,(cnt.get(x)||0)+1)));cnt.forEach((c,x)=>{if(c*2>=sp.size)all.add(x);});
+    return full.filter(d=>{const s=sp.get(d[E.player]);for(const x of all)if(!s.has(x))return false;return true;});
+  };
+  const KEYS={dist:E.dist,hsr:E.hsr,spr:E.sprint};
+  const colMean=(rows,c)=>{const v=rows.map(d=>+d[c]).filter(x=>!isNaN(x)&&isFinite(x));return v.length?v.reduce((a,b)=>a+b,0)/v.length:null;};
+  const vals=rows=>{const r={};for(const k in KEYS)r[k]=rows.length?colMean(rows,KEYS[k]):null;return r;};
+  const rpeOfRows=rows=>rpeMean(firstPer(rows).map(rpeVal).filter(v=>v!=null));
+  /* earlier sessions of the same kind (same match key), run under the ticked team sessions, before this session's day */
+  const refFor=(id,day)=>{
+    const key=sessMatchKey(id),per=[],rp=[];
+    byEv.forEach((rs,oid)=>{
+      if(oid===id)return;const e=EVX.get(oid);if(!e||e.isGame||e.day==null||day==null||e.day>=day)return;
+      if((rs[0][E.tags]||'').toLowerCase().trim()!=='training')return;
+      if(!rs.some(d=>tsSet.has(d['Team Session'])))return;if(sessMatchKey(oid)!==key)return;
+      const r=trainRows(oid);if(r.length)per.push(vals(r));
+      const a=rpeOfRows(rs.filter(d=>d[E.split]==='Full Session'&&rptRow(d)));if(a!=null)rp.push(a);
+    });
+    let v=null;if(per.length){v={};for(const k in KEYS){const x=per.map(p=>p[k]).filter(z=>z!=null);v[k]=x.length?x.reduce((a,b)=>a+b,0)/x.length:null;}}
+    return{n:per.length,v,rpe:rpeMean(rp),rpeN:rp.length};
+  };
+  const DOWs=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const S=o.trainIds.map(id=>{
+    const rs=(byEv.get(id)||[]).filter(rptRow);
+    const full=firstPer(rs.filter(d=>d[E.split]==='Full Session'));
+    const e=EVX.get(id),day=e&&e.day!=null?e.day:(full[0]&&full[0]._date?dayNo(full[0]._date):null),dt=day!=null?dayDate(day):null;
+    let md=null;try{md=evMd(id,tsKey(evTs(id)));}catch(err){}
+    const key=sessMatchKey(id),ans=full.map(rpeVal).filter(v=>v!=null);
+    const splits=[...new Set(rs.map(d=>d[E.split]).filter(Boolean))].sort((a,b)=>a==='Full Session'?-1:b==='Full Session'?1:0);
+    const tr=trainRows(id);
+    return{id,day,dt,md,key,rows:rs,full,ans,rpe:rpeMean(ans),splits,splitN:splits.length,tr,vals:vals(tr),ref:refFor(id,day),
+      mins:rlAvgDid(full.filter(d=>d[E.pos]!=='GK'),E.mins),
+      lbl:(md&&md!=='MD'?md+' · ':'')+(dt?RL_DOW[dt.getDay()]+' '+dt.getDate()+'/'+(dt.getMonth()+1):String(id).replace(/:.*$/,'').trim()),
+      matchLbl:key==='training'?'Training':sessMatchLabel(key)};
+  }).filter(s=>s.full.length).sort((a,b)=>(a.day||0)-(b.day||0));
+  if(!S.length)return{pages:[],squad,S};
+  const crestB64=o.noAssets?null:await rlAsset('Logo.png');
+  const names=[...new Set(S.flatMap(s=>s.full.map(d=>d[E.player])))],heads={};
+  if(!o.noAssets)await Promise.all(names.map(n=>rlHead(n).then(b=>{heads[n]=b;})));
+  const d0=S[0].dt,d1=S[S.length-1].dt,M=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const dl=d=>d?DOWs[d.getDay()]+' '+d.getDate()+' '+M[d.getMonth()]+' '+d.getFullYear():'';
+  const dateLong=S.length===1?dl(d0):(d0&&d1?(DOWs[d0.getDay()]+' '+d0.getDate()+(d0.getMonth()!==d1.getMonth()||d0.getFullYear()!==d1.getFullYear()?' '+M[d0.getMonth()]:'')+(d0.getFullYear()!==d1.getFullYear()?' '+d0.getFullYear():'')+' – '+dl(d1)):'')+' · '+S.length+' sessions';
+  const ctx={crestB64,squad,audience:'COACH',reportName:'Post-Session Report',seasonLabel:SEASON.report||'',dateLong};
+  const pages=[rlPostCover(ctx,S)];
+  const PER=16;
+  S.forEach(s=>{
+    pages.push(rlPostSummary(ctx,s,'Page '+(pages.length+1)));
+    const out=s.full.filter(d=>d[E.pos]!=='GK').sort((a,b)=>(nv(b[E.dist])||0)-(nv(a[E.dist])||0)),gk=s.full.filter(d=>d[E.pos]==='GK');
+    const mx={};[E.dist,E.wr,E.hsr,E.sprint,E.hacc,E.hdec,E.spd].forEach(c=>{const v=out.map(d=>nv(d[c])).filter(x=>!isNaN(x));mx[c]=v.length?Math.max(...v):null;});
+    const ordered=out.concat(gk),chunks=[];for(let i=0;i<ordered.length;i+=PER)chunks.push(ordered.slice(i,i+PER));
+    chunks.forEach((c,i)=>pages.push(rlPostPlayers(ctx,s,c,i+1,chunks.length,heads,mx,'Page '+(pages.length+1))));
+  });
+  const f=d=>d?String(d.getDate()).padStart(2,'0')+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+d.getFullYear():'';
+  const filename='Spirit_FC_'+squad.replace(/[\s\/]+/g,'_')+'_Post_Session_'+(S.length===1?f(d0):f(d0)+'_to_'+f(d1))+'.pdf';
+  return{pages,squad,S,filename};
+}
+async function generatePostSession(){
+  const tsSel=rptTsSel();
+  const trainIds=[...document.querySelectorAll('.rptTrCb:checked')].map(c=>c.value);
+  if(!tsSel.length){alert('Please tick at least one team session.');return;}
+  if(!trainIds.length){alert('Please tick at least one training session.');return;}
+  const trP=document.getElementById('rptTrPlField').style.display!=='none'?(document.getElementById('rptTrPlayers').value||'all'):'all';
+  rptSavePrefs();
+  const prog=document.getElementById('rptProgress');if(prog)prog.textContent='Loading headshots…';
+  try{
+    const r=await rlPostSessionPages({tsSel,trainIds,trP});
+    if(!r.pages.length){if(prog)prog.textContent='';alert('No players found in the ticked sessions for these team sessions.');return;}
+    const {jsPDF}=window.jspdf;
+    const doc=new jsPDF({orientation:'landscape',unit:'mm',format:[297,210]});
+    for(let i=0;i<r.pages.length;i++){if(prog)prog.textContent='Rendering '+(i+1)+'/'+r.pages.length+'…';await rlRenderPage(doc,r.pages[i],i);}
+    doc.save(r.filename);
+    if(prog)prog.textContent='Done.';
+  }catch(e){console.error(e);if(prog)prog.textContent='Something went wrong: '+e.message;}
+}
+
 /* ===================== END WEEKLY GPS TEAM REPORT FACELIFT ===================== */
 
 setInterval(loadData,5*60*1000); /* does nothing until logged in, and leaves the screen alone when the sheet has not changed */
